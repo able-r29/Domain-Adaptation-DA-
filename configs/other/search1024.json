@@ -1,0 +1,134 @@
+{
+    "dataset" : {
+        "n_fold"      : 5,
+        "path_src"    : "/take/masaya/nsdd/metas/pathes/pathes_59class_qc.json",
+        "batch_size"  : 128,
+        "image_size"  : 1024,
+        "size_crop"   : 896,
+        "size_train"  : 448,
+        "gaussian"    : {
+            "kernel_size" : 11,
+            "sigma"       : [0.001, {
+                "opttype" : "uniform",
+                "args"    : {
+                    "name" : "blarsigma",
+                    "low"  : 0.01,
+                    "high" : 3
+                }
+            }]
+        },
+        "colorjitter" : {
+                            "brightness" : {
+                                "opttype" : "uniform",
+                                "args"    : {
+                                    "name" : "brightness",
+                                    "low"  : 0,
+                                    "high" : 1
+                                }
+                            },
+                            "contrast"   : {
+                                "opttype" : "uniform",
+                                "args"    : {
+                                    "name" : "contrast",
+                                    "low"  : 0,
+                                    "high" : 1
+                                }
+                            },
+                            "saturation" : {
+                                "opttype" : "uniform",
+                                "args"    : {
+                                    "name" : "saturation",
+                                    "low"  : 0,
+                                    "high" : 1
+                                }
+                            },
+                            "hue"        : {
+                                "opttype" : "uniform",
+                                "args"    : {
+                                    "name" : "hue",
+                                    "low"  : 0,
+                                    "high" : 0.5
+                                }
+                            }
+                        },
+        "affine"      : {
+                            "degrees"   : {
+                                "opttype" : "uniform",
+                                "args"    : {
+                                    "name" : "rotation",
+                                    "low"  : 0,
+                                    "high" : 45
+                                }
+                            },
+                            "translate" : null,
+                            "scale"     : null,
+                            "shear"     : {
+                                "opttype" : "uniform",
+                                "args"    : {
+                                    "name" : "shear",
+                                    "low"  : 0,
+                                    "high" : 2
+                                }
+                            }
+                        },
+        "resizecrop"  : {
+                            "size"  : 896,
+                            "scale" : [{
+                                "opttype" : "uniform",
+                                "args"    : {
+                                    "name" : "resizescale",
+                                    "low"  : 0.1,
+                                    "high" : 1
+                                }
+                            },
+                            1.0],
+                            "ratio" : {
+                                "opttype" : "minmaxuniform",
+                                "args"    : {
+                                    "name" : "ratio",
+                                    "low"  : 0.5,
+                                    "high" : 2
+                                }
+                            }
+                        }
+    },
+    "model" : {
+        "name"    : "resnet18-mod",
+        "n_class" : 59,
+        "fc_bias" : false,
+        "trained" : "/take/masaya/nsdd/metas/models/resnet18.pth",
+        "dr"      : {
+            "opttype" : "uniform",
+            "args"    : {
+                "name" : "dropout",
+                "low"  : 0,
+                "high" : 0.9
+            }
+        },
+        "mode"    : "basic"
+    },
+    "opt" : {
+        "name"         : "adam",
+        "lr"           : {
+            "opttype" : "loguniform",
+            "args"    : {
+                "name" : "learningrate",
+                "low"  : 1e-6,
+                "high" : 1e-2
+            }
+        },
+        "betas"        : [0.9, 0.999],
+        "eps"          : 1e-8,
+        "weight_decay" : {
+            "opttype" : "loguniform",
+            "args"    : {
+                "name" : "weight_decay",
+                "low"  : 1e-10,
+                "high" : 1e-1
+            }
+        }
+    },
+    "train" : {
+        "epoch" : 200
+    }
+}

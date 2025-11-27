@@ -1,0 +1,62 @@
+{
+    "wandb": {
+        "project": "ResNet18_val0.2",
+        "entity": "Yuma SASAKI",
+        "tags": ["experiment1", "baseline"]
+    },
+    "dataset": {
+        "name": "meta_trp",
+        "path_src": {
+            "train": "./dataset_val0.2/train_metadata.json",
+            "validation": "./dataset_val0.2/validation_metadata.json"
+        },
+        "dir_img": "./dataset_val0.2",
+        "batch_size": 64,
+        "image_size": 512,
+        "crop_size": 448,
+        "n_workers": 1,
+        "meta_use": [
+            "age",
+            "sex",
+            "part"
+        ]
+    },
+    "model": {
+        "name": "resnet18-mtp",
+        "n_class": 2,
+        "n_meta": 21,
+        "middle": 512,
+        "fc_bias": false,
+        "trained": "/take/masaya/nsdd/metas/models/resnet18.pth",
+        "mode": "basic",
+        "n_dim": 16
+    },
+    "process": {
+        "name": "resnet18-mtp",
+        "path_fold": null,
+        "alpha": 0.2,
+        "gamma": 4,
+        "meta_use": [
+            "age",
+            "sex",
+            "part"
+        ],
+        "loss_func": "ce"
+    },
+    "opt": {
+        "name": "adam",
+        "lr": 1e-04,
+        "betas": [
+            0.9,
+            0.999
+        ],
+        "eps": 1e-08,
+        "weight_decay": 0
+    },
+    "train": {
+        "stop_ratio": 1.5,
+        "epoch": 1000,
+        "min_epoch": 50,
+        "seed": null
+    }
+}

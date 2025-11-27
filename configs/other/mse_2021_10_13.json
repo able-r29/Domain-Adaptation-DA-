@@ -1,0 +1,40 @@
+{
+    "dataset" : {
+        "name"       : "meta",
+        "path_src"   : "/take/masaya/nsdd/metas/folds/2021_10_13/train.json",
+        "dir_img"    : "/img/2021_10_13__512",
+        "batch_size" : 128,
+        "image_size" : 512,
+        "crop_size"  : 448,
+        "n_workers"  : 8,
+        "meta_use"   : ["age", "sex", "part"]
+    },
+    "model" : {
+        "name"        : "resnet18-mse",
+        "n_class"     : 59,
+        "n_meta"      : 21,
+        "middle"      : 512,
+        "d_att"       : 16,
+        "fc_bias"     : false,
+        "trained"     : "/take/masaya/nsdd/metas/models/resnet18.pth",
+        "apply_index" : [4, 5],
+        "mode"        : "basic"
+    },
+    "process" : {
+        "name"      : "resnet18-mse",
+        "loss_func" : "cross_entropy"
+    },
+    "opt" : {
+        "name"         : "adam",
+        "lr"           : 1e-5,
+        "betas"        : [0.9, 0.999],
+        "eps"          : 1e-8,
+        "weight_decay" : 0
+    },
+    "train" : {
+        "stop_ratio" : 1.5,
+        "epoch"      : 200,
+        "min_epoch"  : 50,
+        "seed"       : null
+    }
+}

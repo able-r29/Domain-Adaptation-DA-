@@ -1,0 +1,48 @@
+{
+    "dataset" : {
+        "n_fold"      : 5,
+        "path_src"    : "/take/masaya/nsdd/metas/pathes/pathes_59class_qc.json",
+        "batch_size"  : 128,
+        "size_crop"   : 896,
+        "size_train"  : 448,
+        "gaussian"    : {
+                            "kernel_size" : [11, 11],
+                            "sigma"       : [0.01, 10]
+                        },
+        "colorjitter" : {
+                            "brightness" : 0.5,
+                            "contrast"   : 0.5,
+                            "saturation" : 0.5,
+                            "hue"        : 0.5
+                        },
+        "affine"      : {
+                            "degrees"   : 45, 
+                            "translate" : null,
+                            "scale"     : null,
+                            "shear"     : 1
+                        },
+        "resizecrop"  : {
+                            "size"  : 896,
+                            "scale" : [0.75, 1.0],
+                            "ratio" : [0.75, 1.33]
+                        }
+    },
+    "model" : {
+        "name"    : "resnet18-mod",
+        "n_class" : 59,
+        "fc_bias" : false,
+        "trained" : "/take/masaya/nsdd/metas/models/resnet18.pth",
+        "dr"      : 0.25,
+        "mode"    : "basic"
+    },
+    "opt" : {
+        "name"         : "adam",
+        "lr"           : 1e-5,
+        "betas"        : [0.9, 0.999],
+        "eps"          : 1e-8,
+        "weight_decay" : 0
+    },
+    "train" : {
+        "epoch" : 2
+    }
+}

@@ -1,0 +1,16 @@
+__pycache__/
+dataset_val0.1/
+dataset_val0.2/
+docker/
+models/__pycache__/
+all_data_162.json
+docker-compose.yml
+dockerfile
+.env
+requirements.txt
+雅也先輩mixup.txt
+新しいテキスト ドキュメント.txt
+configs/debug/
+configs/M1/
+configs/M2/
+configs/masayaS_M2_submits/

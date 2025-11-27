@@ -1,0 +1,96 @@
+現在のプログラム（trainer.py）で使用しているファイル・JSONを整理します：
+
+## 1. 設定ファイル（JSON）
+
+### **メイン設定ファイル**
+````bash
+configs/other/wtp_val0.2.json  # --config で指定
+````
+
+### **データセット関連JSON**
+````bash
+# 設定ファイル内の path_src で指定
+./dataset_val0.2/validation_metadata.json  # 検証データのメタデータ
+./dataset_val0.2/train_metadata.json       # 訓練データのメタデータ（推定）
+````
+
+## 2. 画像データディレクトリ
+
+````bash
+./dataset_val0.2/              # dir_img で指定されたディレクトリ
+├── validation_metadata.json
+├── train_metadata.json
+├── image1.jpg
+├── image2.jpg
+└── ...（実際の画像ファイル）
+````
+
+## 3. モデル・処理関連Pythonファイル
+
+````bash
+# インポートされているモジュール
+models/models.py              # モデル取得関数
+models/resnet18_mtp.py        # Meta-Triplet学習モデル（推定）
+datasets/datasets.py         # データセット処理
+common/early_stopping.py     # Early Stopping実装
+common/exponential_moving_average.py  # EMA実装
+common/parse_optuna.py        # Optuna解析
+utils.py                      # ユーティリティ関数
+````
+
+## 4. 出力ファイル・ディレクトリ
+
+````bash
+../resnet18_0.2_es_final/     # 結果保存ディレクトリ
+├── config.json               # 実行時の設定をコピー保存
+├── finish.txt                # 完了マーカー
+├── log/                      # TensorBoardログ
+├── val1_model_XX_Accuracy=Y.pt  # ベストモデル
+├── wandb/                    # WandBログ
+└── command_log.txt           # 実行ログ
+````
+
+## 5. 必要な設定内容
+
+### **wtp_val0.2.json の必要な構造**
+````json
+{
+    "wandb": { "project": "...", "entity": "...", "tags": [...] },
+    "dataset": {
+        "name": "meta_trp",
+        "path_src": { "validation": "./dataset_val0.2/validation_metadata.json" },
+        "dir_img": "./dataset_val0.2",
+        "batch_size": 64,
+        "image_size": 512,
+        "crop_size": 448,
+        "n_workers": 1,
+        "meta_use": []
+    },
+    "model": { "name": "resnet18-mtp", "n_dim": 16 },
+    "process": { "name": "resnet18-mtp", "alpha": 0.2, "gamma": 8 },
+    "opt": { "name": "adam", "lr": 0.001, "weight_decay": 0 },
+    "train": { "epoch": 1000, "seed": 42, "stop_ratio": 0.15, "min_epoch": 50 }
+}
+````
+
+## 6. 実行時に生成される追加ファイル
+
+````bash
+# ログファイル
+./command_log.txt             # utils.command_log() で生成
+../command_log.txt            # 同上（親ディレクトリ）
+````
+
+## 実行に必要なファイルの確認
+
+````bash
+# 必須ファイルが存在するか確認
+ls configs/other/wtp_val0.2.json
+ls dataset_val0.2/validation_metadata.json
+ls -d dataset_val0.2/
+ls models/models.py
+ls datasets/datasets.py
+ls utils.py
+````
+
+**これらすべてのファイルが正しく配置されていれば、プログラムが実行できるはずです。**

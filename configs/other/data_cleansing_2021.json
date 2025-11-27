@@ -1,0 +1,52 @@
+{
+    "dataset" : {
+        "n_fold"      : 5,
+        "path_src"    : "/take/masaya/nsdd/metas/pathes/pathes_59class_2021_2019.json",
+        "batch_size"  : 128,
+        "image_size"  : 512,
+        "size_crop"   : 448,
+        "size_train"  : 448,
+        "gaussian"    : null,
+        "colorjitter" : null,
+        "affine"      : null,
+        "resizecrop"  : null,
+        "mixup"       : false,
+        "n_class"     : 59,
+        "alpha"       : 0
+    },
+    "model" : {
+        "name"    : "resnet18",
+        "n_class" : 59,
+        "fc_bias" : false,
+        "trained" : {
+            "opttype" : "categorical",
+            "args"    : {
+                "name"    : "trained",
+                "choices" : [
+                    "/take/masaya/nsdd/metas/models/resnet18/model_best1622173159.pth",
+                    "/take/masaya/nsdd/metas/models/resnet18/model_best1622271461.pth",
+                    "/take/masaya/nsdd/metas/models/resnet18/model_best1622345911.pth",
+                    "/take/masaya/nsdd/metas/models/resnet18/model_best1622370265.pth",
+                    "/take/masaya/nsdd/metas/models/resnet18/model_best1622468158.pth",
+                    "/take/masaya/nsdd/metas/models/resnet18/model_best1622470311.pth"
+                ]
+            }
+        },
+        "dr"      : 0,
+        "mode"    : "basic"
+    },
+    "process" : {
+        "name"       : "resnet18-mod"
+    },
+    "opt" : {
+        "name"         : "adam",
+        "lr"           : 1e-5,
+        "betas"        : [0.9, 0.999],
+        "eps"          : 1e-8,
+        "weight_decay" : 0
+    },
+    "train" : {
+        "stop_ratio" : 1.5,
+        "epoch"      : 200
+    }
+}
