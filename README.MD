@@ -27,17 +27,14 @@ python3 make.py -r ../results -p test_exp
 ### Usage  
  - config, c : str  
    実験条件ファイルのパス  
- - fold, p : int  
-   Fold番号
  - device, d : str  
    実行デバイス
 
 コマンド例  
 ```
-python3 trainer.py -c ./config/wtp_2021_10_13.json -f 0 -d cuda:0
+python3 trainer.py -c ./config/other/wtp_val0.1.json -d cuda:0
 ```
-これにより修論5章の`ResNet18+Metadata+Weighted Metric Learning`によりFold0番の学習がGPU0番で行われる  
-実験結果は`../0`に出力される  
+out_dirで出力先を指定
 
 
 ## Predict  
@@ -54,7 +51,7 @@ python3 trainer.py -c ./config/wtp_2021_10_13.json -f 0 -d cuda:0
 
 コマンド例  
 ```
-python3 predict.py -t /path/to/test.json -d cuda:0
+python3 predict.py --target test1_metadata0.1.json --device cuda:0 --model_dir ../resnet18XXXXXX
 ```
 これにより`path/to/test.json`に記述されているテスト画像に対する推論がGPU0番で全てのFoldに対して行われる  
 
