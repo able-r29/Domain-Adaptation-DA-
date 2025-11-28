@@ -234,7 +234,7 @@ if __name__ == '__main__':
 
     # torch.multiprocessing.set_start_method('spawn')
 
-    out_dir = '../resnet18_0.2_es_final'
+    out_dir = '../resnet18_0.2_gamma4'
     print(os.path.join(out_dir, 'finish.txt'))
     if not os.path.exists(out_dir):
         os.mkdir(out_dir)
