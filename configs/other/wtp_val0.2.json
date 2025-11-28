@@ -14,7 +14,7 @@
         "batch_size": 64,
         "image_size": 512,
         "crop_size": 448,
-        "n_workers": 1,
+        "n_workers": 0,
         "meta_use": [
             "age",
             "sex",
