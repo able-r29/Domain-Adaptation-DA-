@@ -90,11 +90,18 @@ def plot_roc_curve(true_labels, predictions, save_path, class_names=None):
     """
     from sklearn.metrics import roc_curve as sklearn_roc_curve, auc as sklearn_auc
     
+    # Softmaxを適用して確率に変換
+    def manual_softmax(logits):
+        exp_logits = np.exp(logits - np.max(logits, axis=1, keepdims=True))
+        return exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
+    
+    normalized_predictions = manual_softmax(predictions)
+    
     plt.figure(figsize=(8, 6))
     
     if predictions.shape[1] == 2:
-        # 2クラス分類の場合
-        fpr, tpr, _ = sklearn_roc_curve(true_labels, predictions[:, 1])
+        # 2クラス分類の場合 - 正規化後の確率を使用
+        fpr, tpr, _ = sklearn_roc_curve(true_labels, normalized_predictions[:, 1])
         roc_auc = sklearn_auc(fpr, tpr)
         
         plt.plot(fpr, tpr, color='darkorange', lw=2, 
@@ -180,31 +187,34 @@ def calculate_metrics(predictions, true_labels):
     """
     Accuracy, AUC, Macro-Sensitivityを計算
     """
-    # 予測クラス（最大確率のインデックス）
-    predicted_classes = np.argmax(predictions, axis=1)
+    # Softmaxを適用
+    def manual_softmax(logits):
+        exp_logits = np.exp(logits - np.max(logits, axis=1, keepdims=True))
+        return exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
+    
+    normalized_predictions = manual_softmax(predictions)
+    predicted_classes = np.argmax(normalized_predictions, axis=1)
     
     # Accuracy
     accuracy = accuracy_score(true_labels, predicted_classes)
     
-    # AUC (2クラス分類を想定)
+    # AUC - 正規化後の確率を使用
     try:
         if predictions.shape[1] == 2:
-            # 2クラス分類: クラス1の確率を使用
-            pred_probabilities = predictions[:, 1]
+            pred_probabilities = normalized_predictions[:, 1]  # ← 修正
             auc_score = roc_auc_score(true_labels, pred_probabilities)
         else:
-            # 多クラス分類: OvR (One-vs-Rest) AUC
-            auc_score = roc_auc_score(true_labels, predictions, multi_class='ovr')
+            auc_score = roc_auc_score(true_labels, normalized_predictions, multi_class='ovr')
     except ValueError as e:
         print(f"AUC計算エラー: {e}")
-        auc_score = 0.5  # デフォルト値
+        auc_score = 0.5
     
-    # Macro-Sensitivity
+    # Macro-Sensitivity - 正規化後の予測を使用
     try:
-        macro_sens = utils.macro_sensitivity(predictions, true_labels, n_classes=predictions.shape[1])
+        macro_sens = utils.macro_sensitivity(normalized_predictions, true_labels, n_classes=predictions.shape[1])
     except Exception as e:
         print(f"Macro-Sensitivity計算エラー: {e}")
-        macro_sens = 0.0  # デフォルト値
+        macro_sens = 0.0
     
     return {
         'accuracy': accuracy,

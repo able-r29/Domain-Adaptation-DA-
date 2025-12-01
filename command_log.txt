@@ -146,3 +146,7 @@ python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:1
 /take/sasaki/train
 python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:1
 
+2025_12_01__12_09_24
+/take/sasaki/train
+python3 predict.py --target test1_metadata0.2.json --device cuda:0 --model_dir ../resnet18_0.2_gamma4
+
