@@ -14,3 +14,5 @@ configs/debug/
 configs/M1/
 configs/M2/
 configs/masayaS_M2_submits/
+dataset*/
+hanley_mcneil_multi_results/
