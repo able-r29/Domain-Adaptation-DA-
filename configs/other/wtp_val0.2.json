@@ -1,20 +1,20 @@
 {
     "wandb": {
-        "project": "ResNet18_val0.2",
+        "project": "ResNet18_before_gamma4",
         "entity": "Yuma SASAKI",
         "tags": ["experiment1", "baseline"]
     },
     "dataset": {
         "name": "meta_trp",
         "path_src": {
-            "train": "./dataset_val0.2/train_metadata.json",
-            "validation": "./dataset_val0.2/validation_metadata.json"
+            "train": "./dataset/train_metadata.json",
+            "validation": "./dataset/validation_metadata.json"
         },
-        "dir_img": "./dataset_val0.2",
-        "batch_size": 64,
+        "dir_img": "./dataset",
+        "batch_size": 128,
         "image_size": 512,
         "crop_size": 448,
-        "n_workers": 1,
+        "n_workers": 5,
         "meta_use": [
             "age",
             "sex",
@@ -57,6 +57,6 @@
         "stop_ratio": 1.5,
         "epoch": 1000,
         "min_epoch": 50,
-        "seed": null
+        "seed": 2
     }
 }

@@ -17,7 +17,14 @@
 python3 make.py -r ../results -p test_exp
 ```
 これにより`../results/2022_02_20__14_53_32__test_exp`が作成される  
-さらにその中に`code`フォルダが作成され、現在のコードがコピーされている  
+さらにその中に`code`フォルダが作成され、現在のコードがコピーされている 
+
+## フォルダ関連
+### dataset
+ - 市販前train, val, test1, test2, 市販後test1データが入っている
+
+### dataset_after_xxxx
+- 市販後train, val, test1,test2が入っている 
 
 
 ## Trainer  
@@ -45,15 +52,23 @@ out_dirで出力先を指定
    テスト用のFold分割パターンファイルのパス
  - device, d : str  
    実行デバイス
- - fold, f : int, optional  
-   推論するFold  
-   複数指定可能  
+ - model_dir : str
+   ベストモデルが保存されているパス
 
 コマンド例  
 ```
 python3 predict.py --target test1_metadata0.1.json --device cuda:0 --model_dir ../resnet18XXXXXX
 ```
-これにより`path/to/test.json`に記述されているテスト画像に対する推論がGPU0番で全てのFoldに対して行われる  
+これにより`path/to/test.json`に記述されているテスト画像に対する推論がGPU0番で行われる  
+結果の出力先はmodel_dirと同じ
+
+ - dataset_before
+   市販前テストを実行するための画像がこのフォルダに含まれている
+ - after_test1.json
+   市販後テストデータ1に対する性能評価に使用
+ - dataset_after_facility_agepart
+   分割された市販後データに対する推論を実行する際に使用するフォルダ
+   --./dataset_after_facility_agepart/target test1_metadata.json
 
 ### Output fotmat  
 推論により、各Foldには`predict.pickle`と`predict_appendix.pickle`が作成される  

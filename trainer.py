@@ -68,8 +68,8 @@ def main(i_fold:int, device:str, out_dir:str, **kargs) -> None:
 
     #wandbの初期化
     wandb.init(
-        project="ResNet18_val0.2",
-        name=f"validation_ratio0.2",
+        project="ResNet18_before_train_diff_seed",
+        name=f"holdout2",
         config=kargs,
         dir=out_dir,
         tags=["resnet18","triplet"] if "mtp" in kargs.get('model', {}).get('name', '') else ["resnet18"],
@@ -122,13 +122,19 @@ def main(i_fold:int, device:str, out_dir:str, **kargs) -> None:
                                         prepare_batch   =pre,
                                         output_transform=post)
     eval_tr = create_supervised_evaluator(model,
-                                          metrics         =met,
+                                          metrics={
+                                              **met,  # 既存のメトリック
+                                              'loss': Loss(func)  # Loss メトリックを追加
+                                          },
                                           device          =device,
                                           non_blocking    =True,
                                           prepare_batch   =pre,
                                           output_transform=post)
     eval_vl = create_supervised_evaluator(model,
-                                          metrics         =met,
+                                          metrics={
+                                              **met,  # 既存のメトリック
+                                              'loss': Loss(func)  # Loss メトリックを追加
+                                          },
                                           device          =device,
                                           non_blocking    =True,
                                           prepare_batch   =pre,
@@ -165,6 +171,18 @@ def main(i_fold:int, device:str, out_dir:str, **kargs) -> None:
         log_dict = {"epoch": trainer.state.epoch}
         for metric_name, metric_value in metrics.items():
             log_dict[f"train/{metric_name}"] = metric_value
+        wandb.log(log_dict)
+    
+    # 既存のvalidation metricsログの後に追加
+    @eval_vl.on(Events.COMPLETED)
+    def log_validation_metrics(engine):
+        metrics = engine.state.metrics
+        log_dict = {"epoch": trainer.state.epoch}
+        for metric_name, metric_value in metrics.items():
+            log_dict[f"validation/{metric_name}"] = metric_value
+        # Validation Lossを追加
+        if hasattr(engine.state, 'output') and engine.state.output is not None:
+            log_dict["validation/loss"] = engine.state.output
         wandb.log(log_dict)
 
     @eval_vl.on(Events.COMPLETED)
@@ -234,7 +252,7 @@ if __name__ == '__main__':
 
     # torch.multiprocessing.set_start_method('spawn')
 
-    out_dir = '../resnet18_0.2_es_final'
+    out_dir = '../resnet18_before_gamma4_seed2'
     print(os.path.join(out_dir, 'finish.txt'))
     if not os.path.exists(out_dir):
         os.mkdir(out_dir)

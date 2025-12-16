@@ -118,3 +118,203 @@ python3 predict.py --target test1_metadata0.1.json --device cuda:0 --model_dir .
 /take/sasaki/train
 python3 predict.py --target test1_metadata0.1.json --device cuda:0 --model_dir ../resnet18_0.1_es_final
 
+2025_11_27__15_03_45
+/take/sasaki/train
+python3 predict.py --target test1_metadata0.1.json --device cuda:0 --model_dir ../resnet18_0.1_es_final
+
+2025_11_27__16_06_09
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_11_27__16_09_09
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_11_28__13_04_48
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_11_28__13_14_27
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_11_28__13_48_53
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_11_28__13_54_26
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_12_01__12_09_24
+/take/sasaki/train
+python3 predict.py --target test1_metadata0.2.json --device cuda:0 --model_dir ../resnet18_0.2_gamma4
+
+2025_12_02__10_16_23
+/take/sasaki/train
+python3 predict.py --target after_test1_metadata.json --device cuda:0 --model_dir ../resnet18_0.2_gamma4
+
+2025_12_02__18_40_24
+/take/sasaki/train
+python3 predict.py --target ./dataset_val0.2/test1_metadata.json --device cuda:0 --model_dir ../resnet18_0.2_gamma4
+
+2025_12_05__14_17_12
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:0
+
+2025_12_05__14_40_37
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:0
+
+2025_12_05__14_47_03
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:0
+
+2025_12_05__14_53_24
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:0
+
+2025_12_06__00_02_57
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cude:3
+
+2025_12_06__00_05_50
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cude:3
+
+2025_12_06__00_07_58
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:3
+
+2025_12_06__00_14_57
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:3
+
+2025_12_06__00_15_15
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:3
+
+2025_12_07__10_55_20
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:3
+
+2025_12_07__10_56_59
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:3
+
+2025_12_07__11_23_29
+/take/sasaki/train
+python3 predict.py --target ./dataset_before/test1_metadata.json --device cuda:2 --model_dir ../resnet18_before_gamma4
+
+2025_12_08__00_41_14
+/take/sasaki/train
+python3 predict.py --target ./dataset_before/test1_metadata_KMOface.json --device cuda:3 --model_dir ../resnet18_before_gamma4
+
+2025_12_08__00_43_47
+/take/sasaki/train
+python3 predict.py --target ./dataset_before/test1_metadata_KMUbody.json --device cuda:3 --model_dir ../resnet18_before_gamma4
+
+2025_12_08__00_46_44
+/take/sasaki/train
+python3 predict.py --target ./dataset_before/test1_metadata_KSObody.json --device cuda:3 --model_dir ../resnet18_before_gamma4
+
+2025_12_08__00_49_01
+/take/sasaki/train
+python3 predict.py --target ./dataset_before/test1_metadata_SSObody.json --device cuda:3 --model_dir ../resnet18_before_gamma4
+
+2025_12_08__00_51_49
+/take/sasaki/train
+python3 predict.py --target ./dataset_before/test1_metadata_SSOface.json --device cuda:3 --model_dir ../resnet18_before_gamma4
+
+2025_12_08__00_53_50
+/take/sasaki/train
+python3 predict.py --target ./dataset_before/test1_metadata_SSUbody.json --device cuda:3 --model_dir ../resnet18_before_gamma4
+
+2025_12_08__00_55_25
+/take/sasaki/train
+python3 predict.py --target ./dataset_before/test1_metadata_YNObody.json --device cuda:3 --model_dir ../resnet18_before_gamma4
+
+2025_12_08__00_57_15
+/take/sasaki/train
+python3 predict.py --target ./dataset_before/test1_metadata_YNUbody.json --device cuda:3 --model_dir ../resnet18_before_gamma4
+
+2025_12_08__10_29_46
+/take/sasaki/train
+python3 predict.py --target ./after_test1.json --device cuda:3 --model_dir ../resnet18_before_gamma4
+
+2025_12_08__12_57_22
+/take/sasaki/train
+python3 predict.py --target ./dataset_before/test1_metadata.json --device cuda:3 --model_dir ../resnet18_before_gamma4
+
+2025_12_09__15_31_02
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_12_09__15_32_42
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_12_09__15_52_03
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:2
+
+2025_12_09__15_52_33
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:2
+
+2025_12_09__15_54_28
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:3
+
+2025_12_11__11_18_31
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:2
+
+2025_12_11__11_19_09
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:3
+
+2025_12_11__19_24_23
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_12_11__19_25_41
+/take/sasaki/train
+python3 trainer.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_12_12__17_56_24
+/take/sasaki/train
+python3 predict.py --target ./dataset_before/test1_metadata.json --device cuda:1 --model_dir ../resnet18_before_gamma4_seed1
+
+2025_12_12__18_15_12
+/take/sasaki/train
+python3 predict.py --target ./dataset/test1_metadata.json --device cuda:1 --model_dir ../resnet18_before_gamma4_seed1
+
+2025_12_12__18_28_43
+/take/sasaki/train
+python3 predict.py --target ./dataset/after_test1.json --device cuda:1 --model_dir ../resnet18_before_gamma4_seed1
+
+2025_12_12__18_31_19
+/take/sasaki/train
+python3 predict.py --target ./dataset/test1_metadata.json --device cuda:1 --model_dir ../resnet18_before_gamma4_seed2
+
+2025_12_12__18_34_15
+/take/sasaki/train
+python3 predict.py --target ./dataset/after_test1.json --device cuda:1 --model_dir ../resnet18_before_gamma4_seed2
+
+2025_12_12__18_37_17
+/take/sasaki/train
+python3 predict.py --target ./dataset/test1_metadata.json --device cuda:1 --model_dir ../resnet18_before_gamma4_seed3
+
+2025_12_12__18_39_40
+/take/sasaki/train
+python3 predict.py --target ./dataset/after_test1.json --device cuda:1 --model_dir ../resnet18_before_gamma4_seed3
+
+2025_12_12__18_41_43
+/take/sasaki/train
+python3 predict.py --target ./dataset/test1_metadata.json --device cuda:1 --model_dir ../resnet18_before_gamma4_seed4
+
+2025_12_12__18_43_33
+/take/sasaki/train
+python3 predict.py --target ./dataset/test1_metadata.json --device cuda:1 --model_dir ../resnet18_before_gamma4_seed5
+
