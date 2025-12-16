@@ -24,7 +24,10 @@ python3 make.py -r ../results -p test_exp
  - 市販前train, val, test1, test2, 市販後test1データが入っている
 
 ### dataset_after_xxxx
-- 市販後train, val, test1,test2が入っている 
+- 市販後train, val, test1,test2が入っている
+
+### dataset_age_and_part_del
+ - ダーモスコピーでない画像を削除した元データ 
 
 
 ## Trainer  
