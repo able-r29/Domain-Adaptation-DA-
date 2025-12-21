@@ -318,3 +318,91 @@ python3 predict.py --target ./dataset/test1_metadata.json --device cuda:1 --mode
 /take/sasaki/train
 python3 predict.py --target ./dataset/test1_metadata.json --device cuda:1 --model_dir ../resnet18_before_gamma4_seed5
 
+2025_12_18__13_48_58
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_12_18__13_50_15
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_12_18__13_55_42
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_12_18__14_02_51
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_12_18__14_05_20
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_12_18__14_20_56
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_12_18__14_53_50
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_12_18__15_00_01
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_12_18__15_07_23
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_12_18__15_12_19
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_12_18__15_20_22
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_12_18__15_31_29
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1
+
+2025_12_18__15_33_51
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1,2
+
+2025_12_18__15_40_27
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1 -p DistributedDataParallel -w 2
+
+2025_12_19__14_56_36
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1,2
+
+2025_12_19__15_18_18
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1,2
+
+2025_12_19__15_42_10
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1,2
+
+2025_12_19__16_23_43
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1,2 -p single
+
+2025_12_19__16_49_33
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1,2
+
+2025_12_19__17_03_03
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1,2
+
+2025_12_20__19_02_52
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1,2
+
+2025_12_20__19_10_21
+/take/sasaki/train
+python3 trainer_d.py -c ./configs/other/wtp_val0.2.json -d cuda:1,2
+

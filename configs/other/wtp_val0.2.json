@@ -1,8 +1,8 @@
 {
     "wandb": {
-        "project": "ResNet18_before_gamma4",
+        "project": "ResNet18_DANN_domain_adaptation", 
         "entity": "Yuma SASAKI",
-        "tags": ["experiment1", "baseline"]
+        "tags": ["experiment1", "dann", "domain_adaptation"]
     },
     "dataset": {
         "name": "meta_trp",
@@ -11,6 +11,23 @@
             "validation": "./dataset/validation_metadata.json"
         },
         "dir_img": "./dataset",
+        "batch_size": 128,
+        "image_size": 512,
+        "crop_size": 448,
+        "n_workers": 5,
+        "meta_use": [
+            "age",
+            "sex", 
+            "part"
+        ]
+    },
+    "dataset_target": {
+        "name": "meta_trp",
+        "path_src": {
+            "train": "./target_dataset/train_metadata.json",
+            "validation": "./target_dataset/validation_metadata.json"
+        },
+        "dir_img": "./target_dataset",
         "batch_size": 128,
         "image_size": 512,
         "crop_size": 448,
@@ -31,6 +48,11 @@
         "mode": "basic",
         "n_dim": 16
     },
+    "dann": {
+        "trade_off": 1.0,
+        "bottleneck_dim": 256,
+        "domain_hidden_size": 1024
+    },
     "process": {
         "name": "resnet18-mtp",
         "path_fold": null,
@@ -44,14 +66,15 @@
         "loss_func": "ce"
     },
     "opt": {
-        "name": "adam",
-        "lr": 1e-04,
-        "betas": [
-            0.9,
-            0.999
-        ],
-        "eps": 1e-08,
-        "weight_decay": 0
+        "name": "sgd",
+        "lr": 0.01,
+        "momentum": 0.9,
+        "weight_decay": 0.0005
+    },
+    "scheduler": {
+        "name": "lambda",
+        "gamma": 0.1,
+        "decay_rate": 0.001
     },
     "train": {
         "stop_ratio": 1.5,

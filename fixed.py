@@ -21,9 +21,7 @@ for fname in sample_filenames:
     print(f"  '{fname}'")
 
 # 各ファイルを修正
-files = ['test1_metadata_KMOface', 'test1_metadata_KMUbody', 'test1_metadata_KSObody', 
-        'test1_metadata_SSObody', 'test1_metadata_SSOface','test1_metadata_SSUbody',
-        'test1_metadata_YNObody', 'test1_metadata_YNUbody']
+files = ['train_metadata', 'validation_metadata']
 for file_name in files:
     input_file = f'{file_name}.json'
     output_file = f'{file_name}_fixed.json'

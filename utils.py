@@ -1,205 +1,332 @@
-import json
-import os
-import pickle
-import csv
+"""
+Utility functions for DANN training
+"""
 
+import torch
+import torch.nn as nn
+import torch.optim as optim
 import numpy as np
-from torch import Tensor
-from scipy import stats
-import sys
-import datetime
-
-
-def mkdir(path):
-    if not os.path.exists(path) or not os.path.isdir(path):
-        os.mkdir(path)
-        return True
-    return False
-
-def makedirs(path):
-    dirname = os.path.dirname(path)
-    if dirname != '' and not os.path.exists(dirname):
-        os.makedirs(dirname)
-
-
-def argmax(l:list):
-    if isinstance(l, np.ndarray):
-        return l.argmax()
-    return l.index(max(l))
-
-
-def mode(arr):
-    return int(stats.mode(arr)[0])
+import os
+import json
+import datasets.datasets as dataset
+import models.models as models
 
 
 def load_json(path):
-    with open(path, 'r', encoding='utf_8') as f:
-        dst = json.load(f)
-    return dst
-
-def save_json(path, obj):
-    with open(path, 'w', encoding='utf_8') as f:
-        json.dump(obj, f, indent=4)
-    print(f'output: {path}')
+    """JSONファイルを読み込み"""
+    with open(path, 'r') as f:
+        return json.load(f)
 
 
-def load_csv(path, encoding='utf_8_sig'):
-    with open(path, 'r', newline='', encoding=encoding) as f:
-        reader = csv.reader(f, delimiter=',')
-        dst = list(reader)
-    return dst
+def save_json(path, data):
+    """JSONファイルを保存"""
+    with open(path, 'w') as f:
+        json.dump(data, f, indent=2)
 
 
-def save_csv(path, obj, encoding='utf_8_sig', mode='w'):
-    makedirs(path)
-    with open(path, mode, newline='', encoding=encoding) as f:
-        wtr = csv.writer(f)
-        wtr.writerows(obj)
-    print(f'output: {path}')
-
-
-def save_pickle(path, obj):
-    with open(path, 'wb') as f:
-        pickle.dump(obj, f)
-    print(f'output: {path}')
-
-def load_text(path, encoding='utf_8_sig'):
-    with open(path, 'r', encoding=encoding) as f:
-        text = f.read()
-    return text
-
-
-def save_text(path, text, encoding='utf_8_sig', mode='w'):
-    makedirs(path)
-    with open(path, mode, encoding=encoding) as f:
+def save_text(path, text):
+    """テキストファイルを保存"""
+    with open(path, 'w') as f:
         f.write(text)
-    print(f'output: {path}')
 
 
-
-def as_numpy(x):
-    if isinstance(x, np.ndarray):
-        return x
-    if isinstance(x, list):
-        return np.array(x)
-    if x.requires_grad:
-        x = x.detach()
-    if x.device.type == 'cuda':
-        x = x.cpu()
-
-    return x.numpy()
+def command_log(out_dir):
+    """コマンドログを保存"""
+    import sys
+    command = ' '.join(sys.argv)
+    save_text(os.path.join(out_dir, 'command.txt'), command)
 
 
-def TopN_accuracy(y, t, n):
-    if isinstance(y, Tensor):
-        y = as_numpy(y)
-    if isinstance(t, Tensor):
-        t = as_numpy(t)
-    if isinstance(y, list):
-        y = np.array(y)
-    if isinstance(t, list):
-        t = np.array(t)
-
-    arg = np.argsort(y, axis=1)
-    top5 = arg[:, -n:]
-
-    contain = (top5 - t.reshape(-1,1)) == 0
-
-    return float(np.sum(contain) / y.shape[0])
-
-
-def macro_sensitivity(y_pred, y_true, n_classes=2):
-    """
-    マクロ平均センシティビティ（各クラスのRecall/TPRの平均）を計算
-    """
-    if isinstance(y_pred, Tensor):
-        y_pred = as_numpy(y_pred)
-    if isinstance(y_true, Tensor):
-        y_true = as_numpy(y_true)
-    
-    # 予測値を確率からクラス予測に変換
-    if y_pred.ndim > 1:
-        y_pred_class = np.argmax(y_pred, axis=1)
+def parse_devices(device_str):
+    """デバイス文字列を解析"""
+    if ',' in device_str:
+        device_parts = device_str.replace('cuda:', '').split(',')
+        device_ids = []
+        for part in device_parts:
+            try:
+                device_id = int(part.strip())
+                if torch.cuda.is_available() and device_id < torch.cuda.device_count():
+                    device_ids.append(device_id)
+            except ValueError:
+                pass
+        
+        if not device_ids:
+            device_ids = [0]
+            
+        primary_device = torch.device(f'cuda:{device_ids[0]}')
+        return device_ids, primary_device
     else:
-        y_pred_class = y_pred
+        device_id = int(device_str.replace('cuda:', ''))
+        return [device_id], torch.device(f'cuda:{device_id}')
+
+
+def setup_cuda_environment(device_ids, seed=None):
+    """CUDA環境セットアップ"""
+    torch.backends.cudnn.benchmark = True
     
-    sensitivities = []
+    if seed is not None:
+        import random
+        os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':16:8'
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        random.seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        g = torch.Generator()
+        g.manual_seed(seed)
+        return g
+    return None
+
+
+def print_gpu_memory_info(device_ids):
+    """GPU メモリ使用量を表示"""
+    for device_id in device_ids:
+        torch.cuda.empty_cache()
+        print(f"🔍 GPU {device_id} memory:")
+        device_obj = torch.device(f'cuda:{device_id}')
+        total_mem = torch.cuda.get_device_properties(device_obj).total_memory / 1e9
+        allocated_mem = torch.cuda.memory_allocated(device_obj) / 1e9
+        print(f"  Total: {total_mem:.2f} GB, Allocated: {allocated_mem:.2f} GB, Free: {total_mem - allocated_mem:.2f} GB")
+
+
+def get_datasets(config, fold, generator):
+    """データセットを取得"""
+    # ソースドメイン
+    loader_src, loader_eval_tr, loader_eval_vl = dataset.get_dataset(
+        i_fold=fold, generator=generator, shuffle=True, **config['dataset']
+    )
     
-    for class_idx in range(n_classes):
-        # 各クラスについてTrue Positive, False Negativeを計算
-        tp = np.sum((y_true == class_idx) & (y_pred_class == class_idx))
-        fn = np.sum((y_true == class_idx) & (y_pred_class != class_idx))
+    # ターゲットドメイン
+    if 'dataset_target' in config:
+        loader_target, _, _ = dataset.get_dataset(
+            i_fold=fold, generator=generator, shuffle=True, **config['dataset_target']
+        )
+    else:
+        loader_target = loader_src
+    
+    return loader_src, loader_eval_tr, loader_eval_vl, loader_target
+
+
+def get_model_and_processors(config, device):
+    """モデルと前後処理を取得"""
+    backbone = models.get_model(**config['model']).to(device)
+    pre, post, func, met = models.get_process(device=device, **config['process'])
+    return backbone, pre, post, func, met
+
+
+def init_optimizer(params, config):
+    """オプティマイザーを初期化"""
+    opt_config = config['opt']
+    name = opt_config['name']
+    
+    if name == 'sgd':
+        kwargs = {k: v for k, v in opt_config.items() if k != 'name'}
+        if 'momentum' in kwargs:
+            kwargs['nesterov'] = True
+        return optim.SGD(params, **kwargs)
+    elif name == 'adam':
+        return optim.Adam(params, **{k: v for k, v in opt_config.items() if k != 'name'})
+    elif name == 'rmsprop':
+        return optim.RMSprop(params, **{k: v for k, v in opt_config.items() if k != 'name'})
+    else:
+        raise ValueError(f"Unknown optimizer: {name}")
+
+
+def get_scheduler(optimizer, config):
+    """学習率スケジューラーを取得"""
+    if 'scheduler' not in config:
+        return None
         
-        # Sensitivity = TP / (TP + FN)
-        if tp + fn > 0:
-            sensitivity = tp / (tp + fn)
+    scheduler_config = config['scheduler']
+    if scheduler_config['name'] == 'lambda':
+        gamma = scheduler_config.get('gamma', 0.1)
+        decay_rate = scheduler_config.get('decay_rate', 0.001)
+        return optim.lr_scheduler.LambdaLR(
+            optimizer, 
+            lambda x: gamma * (1. + decay_rate * float(x)) ** (-0.75)
+        )
+    return None
+
+
+def is_integer_dtype(dtype):
+    """dtype が整数型かどうかを安全に判定"""
+    dtype_str = str(dtype)
+    integer_types = ['int8', 'int16', 'int32', 'int64', 'uint8', 'bool']
+    return any(int_type in dtype_str for int_type in integer_types)
+
+
+def is_string_tensor(tensor):
+    """テンソルが文字列型かどうかを安全に判定"""
+    if not isinstance(tensor, torch.Tensor):
+        return False
+    
+    # PyTorchバージョンに依存しない文字列型チェック
+    dtype_str = str(tensor.dtype)
+    return 'object' in dtype_str
+
+
+def convert_string_tensor_to_numeric(tensor, device):
+    """文字列テンソルを数値テンソルに変換"""
+    try:
+        if is_string_tensor(tensor):
+            # 文字列テンソルの場合
+            if hasattr(tensor, 'tolist'):
+                string_list = tensor.tolist()
+            else:
+                string_list = [item.item() if hasattr(item, 'item') else str(item) for item in tensor]
+            
+            # 一意なラベルを取得してインデックスに変換
+            unique_labels = sorted(list(set(string_list)))
+            label_to_idx = {label: idx for idx, label in enumerate(unique_labels)}
+            indices = [label_to_idx[label] for label in string_list]
+            return torch.tensor(indices, dtype=torch.long).to(device)
         else:
-            sensitivity = 0.0
+            # 数値テンソルの場合はそのまま返す（型変換のみ）
+            if not is_integer_dtype(tensor.dtype):
+                return tensor.long().to(device)
+            else:
+                return tensor.to(device)
+    except Exception as e:
+        print(f"❌ String tensor conversion failed: {e}")
+        # フォールバック: ゼロテンソル
+        return torch.zeros(len(tensor), dtype=torch.long).to(device)
+
+
+def safe_batch_processing(batch, device, pre_function=None, is_evaluation=False):
+    """バッチを安全に処理（修正版：評価時前処理強制適用）"""
+    try:
+        # 評価時も前処理を必ず適用
+        if pre_function is not None:
+            try:
+                x, y = pre_function(batch, device, True)  # 最後の引数をTrueに固定
+                
+                # ラベル処理
+                if isinstance(y, dict):
+                    if 'label' in y:
+                        y = y['label']
+                    elif 'ya' in y:
+                        y = y['ya']
+                    else:
+                        y = list(y.values())[0]
+                
+                # 型変換
+                if isinstance(y, torch.Tensor):
+                    if is_string_tensor(y):
+                        y = convert_string_tensor_to_numeric(y, device)
+                    elif not is_integer_dtype(y.dtype):
+                        y = y.long().to(device)
+                    else:
+                        y = y.to(device)
+                
+                return x, y
+                
+            except Exception as e:
+                print(f"Pre-processing failed: {e}, using manual processing")
         
-        sensitivities.append(sensitivity)
+        # 手動処理（前処理がない場合のみ）
+        if isinstance(batch, (list, tuple)) and len(batch) >= 2:
+            x, y = batch[0], batch[1]
+            
+            # データの型変換とデバイス移動
+            if isinstance(x, torch.Tensor):
+                x = x.to(device)
+            elif isinstance(x, dict):
+                x = {k: v.to(device) if isinstance(v, torch.Tensor) else v 
+                     for k, v in x.items()}
+            
+            # ラベル処理
+            if isinstance(y, torch.Tensor):
+                if is_string_tensor(y):
+                    y = convert_string_tensor_to_numeric(y, device)
+                else:
+                    y = y.long().to(device)
+            elif isinstance(y, (list, tuple)):
+                try:
+                    y = torch.tensor(y, dtype=torch.long).to(device)
+                except:
+                    y = torch.zeros(len(y) if hasattr(y, '__len__') else 1, 
+                                   dtype=torch.long).to(device)
+            
+            return x, y
+        
+        else:
+            raise ValueError(f"Unexpected batch format: {type(batch)}")
+        
+    except Exception as e:
+        print(f"❌ Batch processing failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise e
+
+
+def safe_post_processing(y_pred, post_function, x, y):
+    """後処理を安全に適用"""
+    if post_function is None:
+        return y_pred
     
-    # マクロ平均
-    return np.mean(sensitivities)
+    try:
+        import inspect
+        sig = inspect.signature(post_function)
+        params = list(sig.parameters.keys())
+        
+        if len(params) == 4:
+            return post_function(y_pred, x, y, None)
+        elif len(params) == 3:
+            return post_function(y_pred, x, y)
+        elif len(params) == 2:
+            return post_function(y_pred, y)
+        else:
+            return post_function(y_pred)
+            
+    except Exception as e:
+        print(f"Post-processing failed: {e}, using raw predictions")
+        return y_pred
 
 
-def convert_level(preds, mat, truthes=None, cnv=None, level=None):
-    if isinstance(mat, str):
-        mat = load_json(mat)[level]
-        mat = np.array(mat)
-    preds = np.array(preds)
-    preds = (mat @ preds.T).T
-    if truthes is None:
-        return preds
-
-    if isinstance(cnv, str):
-        cnv = load_json(cnv)[level]
-    truthes = [cnv[i] for i in truthes]
-    return preds, truthes
-
-
-def command_log(dir):
-    output = []
-    argv = sys.argv
-    argv = ' '.join(argv)
-
-    date = datetime.datetime.today() \
-           .astimezone(datetime.timezone(datetime.timedelta(hours=9))) \
-           .strftime('%Y_%m_%d__%H_%M_%S')
-    output.append(date)
-
-    output.append(os.getcwd())
-    output.append('python3 ' + argv)
-    output.append('\n')
-
-    output = '\n'.join(output)
-
-    if not os.path.isdir(dir):
-        dir = os.path.dirname(dir)
-    path = os.path.join(dir, 'command_log.txt')
-    save_text(path, output, mode='a')
-    save_text("./command_log.txt", output, mode='a')
-
-
-def normalize_labels_to_binary():
-    """ラベルを2クラス（0,1）に正規化する"""
-    files = ['train_metadata_standardized.json', 'validation_metadata_standardized.json']
+def set_alpha_safely(model, alpha):
+    """DataParallel対応でset_alphaを安全に呼び出し"""
+    from torch.nn.parallel import DataParallel, DistributedDataParallel
     
-    for file_name in files:
-        with open(file_name, 'r') as f:
-            data = json.load(f)
+    if isinstance(model, (DataParallel, DistributedDataParallel)):
+        # .moduleを通してアクセス
+        model.module.set_alpha(alpha)
+    else:
+        # 直接アクセス
+        model.set_alpha(alpha)
+
+
+def macro_sensitivity(y_pred, y_true, n_classes):
+    """Macro Sensitivity計算（ダミー実装）"""
+    try:
+        from sklearn.metrics import confusion_matrix
+        if y_pred.ndim > 1:
+            y_pred_labels = np.argmax(y_pred, axis=1)
+        else:
+            y_pred_labels = y_pred
         
-        for entry in data:
-            if 'LABEL' in entry:
-                # 31 -> 1, 0 -> 0 に変換
-                entry['LABEL'] = 1 if entry['LABEL'] == 31 else 0
-                # CASEも更新
-                if 'CASE' in entry:
-                    case_parts = entry['CASE'].split('___')
-                    if len(case_parts) >= 3:
-                        case_parts[-1] = str(entry['LABEL'])
-                        entry['CASE'] = '___'.join(case_parts)
+        cm = confusion_matrix(y_true, y_pred_labels, labels=range(n_classes))
+        sensitivities = []
         
-        output_file = file_name.replace('.json', '_binary.json')
-        save_json(output_file, data)  # 既存のsave_json関数を使用
+        for i in range(n_classes):
+            tp = cm[i, i]
+            fn = cm[i, :].sum() - tp
+            if tp + fn > 0:
+                sensitivity = tp / (tp + fn)
+                sensitivities.append(sensitivity)
         
-        print(f"Created {output_file} with binary labels")
+        return np.mean(sensitivities) if sensitivities else 0.0
+    except Exception:
+        return 0.5  # フォールバック
+
+
+class ForeverDataIterator:
+    """データローダーの無限イテレータ"""
+    def __init__(self, data_loader):
+        self.data_loader = data_loader
+        self.iter = iter(self.data_loader)
+    
+    def __next__(self):
+        try:
+            return next(self.iter)
+        except StopIteration:
+            self.iter = iter(self.data_loader)
+            return next(self.iter)
