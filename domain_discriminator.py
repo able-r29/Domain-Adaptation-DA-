@@ -66,8 +66,8 @@ class DomainDiscriminator(nn.Module):
             print(f"✓ Domain discriminator layers created: {feature_dim} -> {self.hidden_dim} -> 1")
     
     def forward(self, x):
-        # 勾配反転
-        x = self.grl(x)
+        # ★ ここで勾配反転レイヤーを通過（重要）
+        x = self.grl(x)  # 順伝播：そのまま通す / 逆伝播：勾配を反転
         
         # 動的に分類器を作成
         current_feature_dim = x.size(1)
@@ -79,7 +79,7 @@ class DomainDiscriminator(nn.Module):
     
     def set_alpha(self, alpha):
         """GRLのalpha値を設定"""
-        self.grl.set_alpha(alpha)
+        self.grl.set_alpha(alpha)  # α=1.0に設定
 
 
 class DANNClassifier(nn.Module):

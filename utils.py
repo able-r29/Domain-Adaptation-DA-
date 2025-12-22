@@ -295,26 +295,43 @@ def set_alpha_safely(model, alpha):
 
 
 def macro_sensitivity(y_pred, y_true, n_classes):
-    """Macro Sensitivity計算（ダミー実装）"""
+    """Macro Sensitivity計算（改良版）"""
     try:
         from sklearn.metrics import confusion_matrix
+        import numpy as np
+        
+        # 予測ラベルを取得
         if y_pred.ndim > 1:
             y_pred_labels = np.argmax(y_pred, axis=1)
         else:
             y_pred_labels = y_pred
         
+        # 混同行列を作成
         cm = confusion_matrix(y_true, y_pred_labels, labels=range(n_classes))
         sensitivities = []
         
         for i in range(n_classes):
-            tp = cm[i, i]
-            fn = cm[i, :].sum() - tp
+            tp = cm[i, i]  # True Positive
+            fn = np.sum(cm[i, :]) - tp  # False Negative
+            
             if tp + fn > 0:
                 sensitivity = tp / (tp + fn)
                 sensitivities.append(sensitivity)
+            else:
+                # そのクラスのサンプルが存在しない場合
+                sensitivities.append(0.0)
         
-        return np.mean(sensitivities) if sensitivities else 0.0
-    except Exception:
+        # マクロ平均を計算
+        macro_sens = np.mean(sensitivities) if sensitivities else 0.0
+        
+        # デバッグ情報（最初の評価時のみ）
+        if len(sensitivities) > 0:
+            print(f"📊 Class sensitivities: {[f'{s:.3f}' for s in sensitivities]}, Macro: {macro_sens:.3f}")
+        
+        return macro_sens
+        
+    except Exception as e:
+        print(f"❌ Macro sensitivity calculation failed: {e}")
         return 0.5  # フォールバック
 
 
