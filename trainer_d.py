@@ -10,13 +10,14 @@ from torch.nn.parallel import DataParallel
 import wandb
 from ignite.engine import Events, Engine
 from ignite.contrib.handlers import ProgressBar
+from sklearn.metrics import roc_auc_score  # ←追加
 
 from domain_discriminator import DomainDiscriminator, DANNClassifier, calculate_lambda_p
 import utils
-
+import numpy as np
 
 def create_train_step(classifier, domain_discriminator, optimizer, scheduler, 
-                     iter_target, device, config):
+                    iter_target, device, config, loader_src):
     """学習ステップ関数（疾患分類メトリクス追加版）"""
     cls_criterion = nn.CrossEntropyLoss()
     domain_criterion = nn.BCELoss()
@@ -128,12 +129,15 @@ def create_train_step(classifier, domain_discriminator, optimizer, scheduler,
                 print(f"  Domain labels shape: {domain_labels.shape}")
             
             # GRL強度調整
-            alpha = 1.0  # 固定値
+            p = float(engine.state.iteration + (engine.state.epoch - 1) * len(loader_src)) / (max_epochs * len(loader_src))
+            alpha = 2.0 / (1.0 + np.exp(-10 * p)) - 1.0  # DANNの標準式
+            
+            # alpha = 1.0  # ★ この行を削除
             utils.set_alpha_safely(domain_discriminator, alpha)
             
-            # デバッグ情報でalpha値を確認
+            # デバッグ情報
             if engine.state.epoch <= 2 and engine.state.iteration <= 3:
-                print(f"  GRL alpha: {alpha:.4f} (fixed)")
+                print(f"  GRL alpha: {alpha:.4f} (dynamic, p={p:.4f})")
             
             # 分類器で特徴抽出と分類
             mixed_pred, mixed_features = classifier(mixed_x)
@@ -170,7 +174,6 @@ def create_train_step(classifier, domain_discriminator, optimizer, scheduler,
                 
                 # 分類AUC
                 try:
-                    from sklearn.metrics import roc_auc_score
                     n_classes = source_pred.shape[1]
                     if n_classes == 2:
                         source_pred_prob = torch.softmax(source_pred, dim=1)[:, 1].detach().cpu().numpy()
@@ -229,62 +232,108 @@ def create_train_step(classifier, domain_discriminator, optimizer, scheduler,
     return train_step
 
 
-def create_evaluation_step(classifier, domain_discriminator, device, config):
-    """評価ステップ関数（ドメインAUC修正版）"""
-    # 前処理関数を事前に取得
+def create_evaluation_step(classifier, domain_discriminator, iter_target, device, config):
+    """シンプルな評価ステップ（ドメイン損失含む）"""
     _, pre, _, _, _ = utils.get_model_and_processors(config, device)
-    
-    # 損失関数を定義
     cls_criterion = nn.CrossEntropyLoss()
     domain_criterion = nn.BCELoss()
+    trade_off = config.get('dann', {}).get('trade_off', 1.0)
     
     def evaluation_step(engine, batch):
         classifier.eval()
         domain_discriminator.eval()
+        
         with torch.no_grad():
             try:
-                x, y = utils.safe_batch_processing(batch, device, pre, is_evaluation=True)
+                # ソースバッチ処理
+                x_s, y_s = utils.safe_batch_processing(batch, device, pre, is_evaluation=True)
                 
-                # ★ 疾患分類の評価（ソースデータのみ）
-                y_pred, features = classifier(x)
+                # ターゲットバッチ取得
+                target_batch = next(iter_target)
+                x_t, _ = utils.safe_batch_processing(target_batch, device, pre, is_evaluation=True)
                 
-                cls_loss = cls_criterion(y_pred, y)
-                correct = (y_pred.argmax(dim=1) == y).float().mean()
+                # バッチサイズ調整
+                batch_size = min(
+                    x_s.shape[0] if isinstance(x_s, torch.Tensor) else next(iter(x_s.values())).shape[0],
+                    x_t.shape[0] if isinstance(x_t, torch.Tensor) else next(iter(x_t.values())).shape[0]
+                )
                 
-                # CPUに移動してnumpy配列に変換
-                y_pred_np = y_pred.detach().cpu().numpy()
-                y_true_np = y.detach().cpu().numpy()
+                # ソースの一部とターゲットの一部を混合
+                if isinstance(x_s, dict) and isinstance(x_t, dict):
+                    mixed_x = {}
+                    for key in x_s.keys():
+                        if key in x_t:
+                            mixed_x[key] = torch.cat([
+                                x_s[key][:batch_size//2],
+                                x_t[key][:batch_size//2]
+                            ], dim=0)
+                        else:
+                            mixed_x[key] = x_s[key][:batch_size//2]
+                elif isinstance(x_s, torch.Tensor) and isinstance(x_t, torch.Tensor):
+                    mixed_x = torch.cat([x_s[:batch_size//2], x_t[:batch_size//2]], dim=0)
+                else:
+                    # 型が一致しない場合はソースのみ
+                    mixed_x = x_s
+                    batch_size = x_s.shape[0] if isinstance(x_s, torch.Tensor) else next(iter(x_s.values())).shape[0]
                 
-                # macro-sensitivity計算
-                n_classes = y_pred.shape[1]
-                macro_sens = utils.macro_sensitivity(y_pred_np, y_true_np, n_classes)
+                # 分類器で予測
+                if isinstance(mixed_x, dict) and len(mixed_x) > len(x_s) if isinstance(x_s, dict) else True:
+                    # 混合バッチの場合
+                    mixed_pred, mixed_features = classifier(mixed_x)
+                    source_pred = mixed_pred[:batch_size//2]
+                    source_y = y_s[:batch_size//2]
+                    
+                    # ドメインラベル作成
+                    domain_labels = torch.cat([
+                        torch.zeros(batch_size//2, 1),  # ソース
+                        torch.ones(batch_size//2, 1)    # ターゲット
+                    ], dim=0).to(device)
+                    
+                    # ドメイン損失計算
+                    domain_pred = domain_discriminator(mixed_features)
+                    domain_loss = domain_criterion(domain_pred, domain_labels)
+                else:
+                    # ソースのみの場合
+                    source_pred, mixed_features = classifier(x_s)
+                    source_y = y_s
+                    domain_loss = torch.tensor(0.0).to(device)
+                
+                # 分類損失計算
+                cls_loss = cls_criterion(source_pred, source_y)
+                total_loss = cls_loss + trade_off * domain_loss
+                
+                # メトリクス計算
+                cls_acc = (source_pred.argmax(dim=1) == source_y).float().mean()
                 
                 # AUC計算
                 try:
-                    from sklearn.metrics import roc_auc_score
+                    n_classes = source_pred.shape[1]
+                    source_pred_prob = torch.softmax(source_pred, dim=1)
+                    
                     if n_classes == 2:
-                        y_pred_prob = torch.softmax(y_pred, dim=1)[:, 1].detach().cpu().numpy()
-                        auc = roc_auc_score(y_true_np, y_pred_prob)
+                        auc = roc_auc_score(source_y.cpu().numpy(), source_pred_prob[:, 1].cpu().numpy())
                     else:
-                        y_pred_prob = torch.softmax(y_pred, dim=1).detach().cpu().numpy()
-                        auc = roc_auc_score(y_true_np, y_pred_prob, multi_class='ovr')
+                        auc = roc_auc_score(source_y.cpu().numpy(), source_pred_prob.cpu().numpy(), multi_class='ovr')
                 except Exception as e:
+                    print(f"⚠️ AUC calculation failed: {e}")  # エラーメッセージも改善
                     auc = 0.5
                 
                 return {
                     "cls_loss": cls_loss.item(),
-                    "cls_accuracy": correct.item(),
+                    "domain_loss": domain_loss.item(),
+                    "total_loss": total_loss.item(),
+                    "cls_accuracy": cls_acc.item(),
                     "cls_auc": auc,
-                    "cls_macro_sensitivity": macro_sens,
-                    "source_features": features,  # ★ ソース特徴を返す
-                    "source_batch_size": x.shape[0] if isinstance(x, torch.Tensor) else next(iter(x.values())).shape[0]
+                    "cls_macro_sensitivity": utils.macro_sensitivity(
+                        source_pred.cpu().numpy(), source_y.cpu().numpy(), source_pred.shape[1]
+                    )
                 }
-                    
+                
             except Exception as e:
                 print(f"❌ Evaluation step failed: {e}")
                 return {
-                    "cls_loss": 1.0, "cls_accuracy": 0.0, "cls_auc": 0.5, "cls_macro_sensitivity": 0.0,
-                    "source_features": torch.zeros(1, 256).to(device), "source_batch_size": 1
+                    "cls_loss": 1.0, "domain_loss": 1.0, "total_loss": 2.0,
+                    "cls_accuracy": 0.0, "cls_auc": 0.5, "cls_macro_sensitivity": 0.0
                 }
     
     return evaluation_step
@@ -425,12 +474,11 @@ def main(fold, device_ids, primary_device, out_dir, parallel_mode, **config):
     scheduler = utils.get_scheduler(optimizer, config)
     
     # エンジン作成
-    train_step = create_train_step(classifier, domain_discriminator, optimizer, scheduler,
-                                  iter_target, primary_device, config)
+    train_step = create_train_step(classifier, domain_discriminator, optimizer, scheduler,iter_target, primary_device, config, loader_src)
     trainer = Engine(train_step)
     
     # 評価エンジン作成（修正版）
-    evaluation_step = create_evaluation_step(classifier, domain_discriminator, primary_device, config)
+    evaluation_step = create_evaluation_step(classifier, domain_discriminator, iter_target, primary_device, config)
     domain_evaluation_step = create_domain_evaluation_step(domain_discriminator, iter_target, primary_device, config)
     eval_tr = Engine(evaluation_step)
     eval_vl = Engine(evaluation_step)
@@ -444,98 +492,55 @@ def main(fold, device_ids, primary_device, out_dir, parallel_mode, **config):
     def log_results(engine):
         out = engine.state.output
         
-        # 学習時のメトリクス（毎エポック）
-        train_metrics = {
-            "epoch": engine.state.epoch,
-            
-            # ★ 学習時 - 疾患分類
-            "train/cls_loss": out['cls_loss'],
-            "train/cls_accuracy": out['cls_acc'],
-            "train/cls_auc": out['cls_auc'],
-            "train/cls_macro_sensitivity": out['cls_macro_sensitivity'],
-            
-            # ★ 学習時 - ドメイン識別
-            "train/domain_loss": out['domain_loss'],
-            "train/domain_accuracy": out['domain_acc'],
-            "train/domain_auc": out['domain_auc'],
-            
-            # ★ 学習時 - モデル全体損失
-            "train/loss": out['loss']
-        }
-        
         print(f"Epoch {engine.state.epoch:3d} - "
               f"Loss: {out['loss']:.4f} "
               f"(Cls: {out['cls_loss']:.4f}, Domain: {out['domain_loss']:.4f}) | "
-              f"Cls Acc: {out['cls_acc']:.3f}, Cls AUC: {out['cls_auc']:.3f}, "
-              f"Domain Acc: {out['domain_acc']:.3f}, Domain AUC: {out['domain_auc']:.3f}")
+              f"Alpha: {out['alpha']:.4f}")
         
-        # 評価実行（毎エポック）
-        classifier.eval()
-        domain_discriminator.eval()
+        # 評価実行
         try:
+            classifier.eval()
+            domain_discriminator.eval()
+            
             # Train評価
             eval_tr.run(loader_eval_tr, max_epochs=1)
-            train_eval_output = eval_tr.state.output
+            train_eval = eval_tr.state.output
             
             # Validation評価
             eval_vl.run(loader_eval_vl, max_epochs=1)
-            val_output = eval_vl.state.output
+            val_eval = eval_vl.state.output
             
-            # ★ ドメインAUC評価（ソース+ターゲット混合）
-            train_domain_auc, train_domain_acc, train_domain_loss = domain_evaluation_step(
-                train_eval_output["source_features"], train_eval_output["source_batch_size"]
-            )
+            # 学習状況をプリント
+            print(f"  Train Eval - Loss: {train_eval['total_loss']:.4f}, "
+                  f"Acc: {train_eval['cls_accuracy']:.3f}, AUC: {train_eval['cls_auc']:.3f}")
+            print(f"  Val Eval   - Loss: {val_eval['total_loss']:.4f}, "
+                  f"Acc: {val_eval['cls_accuracy']:.3f}, AUC: {val_eval['cls_auc']:.3f}")
             
-            val_domain_auc, val_domain_acc, val_domain_loss = domain_evaluation_step(
-                val_output["source_features"], val_output["source_batch_size"]
-            )
-            
-            # 評価時のメトリクスを追加
-            train_metrics.update({
-                # ★ Train評価 - 疾患分類
-                "train_eval/cls_loss": train_eval_output["cls_loss"],
-                "train_eval/cls_accuracy": train_eval_output["cls_accuracy"],
-                "train_eval/cls_auc": train_eval_output["cls_auc"],
-                "train_eval/cls_macro_sensitivity": train_eval_output["cls_macro_sensitivity"],
+            # wandbログ
+            wandb.log({
+                "epoch": engine.state.epoch,
+                # 訓練時
+                "train/loss": out['loss'],
+                "train/cls_loss": out['cls_loss'],
+                "train/domain_loss": out['domain_loss'],
+                "train/cls_acc": out['cls_acc'],
+                "train/alpha": out['alpha'],
                 
-                # ★ Train評価 - ドメイン識別（修正版）
-                "train_eval/domain_loss": train_domain_loss,
-                "train_eval/domain_accuracy": train_domain_acc,
-                "train_eval/domain_auc": train_domain_auc,
+                # 評価時
+                "train_eval/total_loss": train_eval['total_loss'],
+                "train_eval/cls_acc": train_eval['cls_accuracy'],
+                "train_eval/cls_auc": train_eval['cls_auc'],
                 
-                # ★ Train評価 - モデル全体損失
-                "train_eval/loss": train_eval_output["cls_loss"] + train_domain_loss,
-                
-                # ★ Validation評価 - 疾患分類
-                "val/cls_loss": val_output["cls_loss"],
-                "val/cls_accuracy": val_output["cls_accuracy"],
-                "val/cls_auc": val_output["cls_auc"],
-                "val/cls_macro_sensitivity": val_output["cls_macro_sensitivity"],
-                
-                # ★ Validation評価 - ドメイン識別（修正版）
-                "val/domain_loss": val_domain_loss,
-                "val/domain_accuracy": val_domain_acc,
-                "val/domain_auc": val_domain_auc,
-                
-                # ★ Validation評価 - モデル全体損失
-                "val/loss": val_output["cls_loss"] + val_domain_loss
+                "val/total_loss": val_eval['total_loss'],
+                "val/cls_acc": val_eval['cls_accuracy'],
+                "val/cls_auc": val_eval['cls_auc'],
             })
+            
+            classifier.train()
+            domain_discriminator.train()
             
         except Exception as e:
             print(f"⚠️ Evaluation failed: {e}")
-            # エラー時はデフォルト値を設定
-            train_metrics.update({
-                "train_eval/cls_loss": 1.0, "train_eval/cls_accuracy": 0.0, "train_eval/cls_auc": 0.5, "train_eval/cls_macro_sensitivity": 0.0,
-                "train_eval/domain_loss": 1.0, "train_eval/domain_accuracy": 0.5, "train_eval/domain_auc": 0.5, "train_eval/loss": 2.0,
-                "val/cls_loss": 1.0, "val/cls_accuracy": 0.0, "val/cls_auc": 0.5, "val/cls_macro_sensitivity": 0.0,
-                "val/domain_loss": 1.0, "val/domain_accuracy": 0.5, "val/domain_auc": 0.5, "val/loss": 2.0
-            })
-        
-        # wandbに記録
-        wandb.log(train_metrics)
-        
-        classifier.train()
-        domain_discriminator.train()
     
     # 学習実行
     try:
