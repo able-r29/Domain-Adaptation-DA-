@@ -38,54 +38,116 @@ def command_log(out_dir):
 
 
 def parse_devices(device_str):
-    """デバイス文字列を解析"""
+    """デバイス文字列を解析（複数GPU完全対応）"""
+    
+    # CUDA利用可能性チェック
+    if not torch.cuda.is_available():
+        print("❌ CUDA is not available!")
+        return [0], torch.device('cpu')
+    
+    available_gpu_count = torch.cuda.device_count()
+    print(f"🔍 Available GPUs: {available_gpu_count}")
+    
+    # カンマ区切りの複数GPU指定
     if ',' in device_str:
         device_parts = device_str.replace('cuda:', '').split(',')
         device_ids = []
+        
         for part in device_parts:
             try:
                 device_id = int(part.strip())
-                if torch.cuda.is_available() and device_id < torch.cuda.device_count():
+                if 0 <= device_id < available_gpu_count:
                     device_ids.append(device_id)
+                else:
+                    print(f"⚠️ GPU {device_id} is not available (max: {available_gpu_count-1})")
             except ValueError:
-                pass
+                print(f"⚠️ Invalid device specification: '{part}'")
         
         if not device_ids:
+            print("⚠️ No valid GPUs found, using GPU 0")
             device_ids = [0]
-            
+        
+        # 重複除去・ソート
+        device_ids = sorted(list(set(device_ids)))
         primary_device = torch.device(f'cuda:{device_ids[0]}')
+        
+        print(f"✓ Using GPUs: {device_ids}, Primary: cuda:{device_ids[0]}")
         return device_ids, primary_device
+    
+    # 単一GPU指定
     else:
-        device_id = int(device_str.replace('cuda:', ''))
-        return [device_id], torch.device(f'cuda:{device_id}')
+        device_str = device_str.replace('cuda:', '')
+        try:
+            device_id = int(device_str)
+            if 0 <= device_id < available_gpu_count:
+                primary_device = torch.device(f'cuda:{device_id}')
+                print(f"✓ Using single GPU: cuda:{device_id}")
+                return [device_id], primary_device
+            else:
+                print(f"⚠️ GPU {device_id} is not available, using GPU 0")
+                return [0], torch.device('cuda:0')
+        except ValueError:
+            print(f"⚠️ Invalid device specification: '{device_str}', using GPU 0")
+            return [0], torch.device('cuda:0')
 
 
 def setup_cuda_environment(device_ids, seed=None):
-    """CUDA環境セットアップ"""
-    torch.backends.cudnn.benchmark = True
+    """CUDA環境セットアップ（複数GPU対応）"""
     
+    # 複数GPU環境の最適化
+    if len(device_ids) > 1:
+        print(f"🚀 Setting up multi-GPU environment:")
+        print(f"  CUDNN benchmark: True (for consistent input sizes)")
+        print(f"  CUDNN deterministic: False (for performance)")
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.deterministic = False
+    else:
+        torch.backends.cudnn.benchmark = True
+    
+    # シード設定
     if seed is not None:
         import random
         os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':16:8'
         torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)  # 全GPU対応
         np.random.seed(seed)
         random.seed(seed)
-        torch.cuda.manual_seed_all(seed)
+        
+        print(f"🌱 Random seed set: {seed} (applied to all {len(device_ids)} GPUs)")
+        
         g = torch.Generator()
         g.manual_seed(seed)
         return g
+    
     return None
 
 
 def print_gpu_memory_info(device_ids):
-    """GPU メモリ使用量を表示"""
+    """GPU メモリ使用量を表示（改良版）"""
+    print(f"🔍 GPU Memory Status:")
+    
     for device_id in device_ids:
-        torch.cuda.empty_cache()
-        print(f"🔍 GPU {device_id} memory:")
-        device_obj = torch.device(f'cuda:{device_id}')
-        total_mem = torch.cuda.get_device_properties(device_obj).total_memory / 1e9
-        allocated_mem = torch.cuda.memory_allocated(device_obj) / 1e9
-        print(f"  Total: {total_mem:.2f} GB, Allocated: {allocated_mem:.2f} GB, Free: {total_mem - allocated_mem:.2f} GB")
+        try:
+            # メモリクリア
+            if torch.cuda.is_available() and device_id < torch.cuda.device_count():
+                torch.cuda.empty_cache()
+                
+                device_obj = torch.device(f'cuda:{device_id}')
+                props = torch.cuda.get_device_properties(device_obj)
+                total_mem = props.total_memory / 1e9
+                allocated_mem = torch.cuda.memory_allocated(device_obj) / 1e9
+                cached_mem = torch.cuda.memory_reserved(device_obj) / 1e9
+                free_mem = total_mem - allocated_mem
+                
+                print(f"  GPU {device_id}: {props.name}")
+                print(f"    Total: {total_mem:.2f} GB")
+                print(f"    Allocated: {allocated_mem:.2f} GB ({allocated_mem/total_mem*100:.1f}%)")
+                print(f"    Cached: {cached_mem:.2f} GB ({cached_mem/total_mem*100:.1f}%)")
+                print(f"    Free: {free_mem:.2f} GB ({free_mem/total_mem*100:.1f}%)")
+            else:
+                print(f"  GPU {device_id}: Not available")
+        except Exception as e:
+            print(f"  GPU {device_id}: Error - {e}")
 
 
 def get_datasets(config, fold, generator):
@@ -283,15 +345,24 @@ def safe_post_processing(y_pred, post_function, x, y):
 
 
 def set_alpha_safely(model, alpha):
-    """DataParallel対応でset_alphaを安全に呼び出し"""
+    """DataParallel対応でset_alphaを安全に呼び出し（改良版）"""
     from torch.nn.parallel import DataParallel, DistributedDataParallel
     
-    if isinstance(model, (DataParallel, DistributedDataParallel)):
-        # .moduleを通してアクセス
-        model.module.set_alpha(alpha)
-    else:
-        # 直接アクセス
-        model.set_alpha(alpha)
+    try:
+        if isinstance(model, (DataParallel, DistributedDataParallel)):
+            # .moduleを通してアクセス
+            if hasattr(model.module, 'set_alpha'):
+                model.module.set_alpha(alpha)
+            else:
+                print(f"⚠️ Model module does not have set_alpha method")
+        else:
+            # 直接アクセス
+            if hasattr(model, 'set_alpha'):
+                model.set_alpha(alpha)
+            else:
+                print(f"⚠️ Model does not have set_alpha method")
+    except Exception as e:
+        print(f"⚠️ Failed to set alpha: {e}")
 
 
 def macro_sensitivity(y_pred, y_true, n_classes):

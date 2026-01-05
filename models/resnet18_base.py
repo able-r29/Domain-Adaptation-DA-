@@ -83,6 +83,27 @@ class ResNet(nn.Module):
 
         return x
 
+    def feature(self, x):
+        """特徴抽出メソッド（最終分類層前の512次元特徴量）"""
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+
+        x = self.block11(x)
+        x = self.block12(x)
+        x = self.block21(x)
+        x = self.block22(x)
+        x = self.block31(x)
+        x = self.block32(x)
+        x = self.block41(x)
+        x = self.block42(x)
+
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        # 最終分類層を通さずに512次元特徴量を返す
+        return x
+
 
 def pretrained_resnet18(trained=None, **kargs):
     model = ResNet(**kargs)
@@ -118,33 +139,17 @@ class Model(Module):
 
 
     def forward(self, x):
-        layers = [
-            self.base.conv1,
-            self.base.bn1,
-            self.base.relu,
-            self.base.maxpool,
-            self.base.block11,
-            self.base.block12,
-            self.base.block21,
-            self.base.block22,
-            self.base.block31,
-            self.base.block32,
-            self.base.block41,
-            self.base.block42,
-            self.base.avgpool,
-            lambda x: torch.flatten(x, 1),
-            self.fc,
-        ]
-
-        for l in layers:
-            x = l(x)
-
-        return x
-
+        # 最終分類まで行う
+        features = self.base.feature(x)  # 512次元特徴
+        logits = self.fc(features)       # 分類
+        return logits
 
     def predict(self, *args, **kargs):
         return self.forward(*args, **kargs)
 
+    def feature(self, x):
+        """特徴抽出専用メソッド（DANNで使用）"""
+        return self.base.feature(x)  # 512次元特徴量を返す
 
 
 def get_preprocess(**karg):

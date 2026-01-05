@@ -1,0 +1,66 @@
+{
+    "wandb": {
+        "project": "ResNet18_DANN_base",
+        "entity": "Yuma SASAKI",
+        "tags": ["dann", "resnet18_base", "domain_adaptation"]
+    },
+    "dataset": {
+        "name": "simple",
+        "path_src": {
+            "train": "./dataset/train_metadata.json",
+            "validation": "./dataset/validation_metadata.json"
+        },
+        "dir_img": "./dataset",
+        "batch_size": 128,
+        "image_size": 512,
+        "crop_size": 448,
+        "n_workers": 5
+    },
+    "dataset_target": {
+        "name": "simple",
+        "path_src": {
+            "train": "./target_dataset/train_metadata.json", 
+            "validation": "./target_dataset/validation_metadata.json"
+        },
+        "dir_img": "./target_dataset",
+        "batch_size": 128,
+        "image_size": 512,
+        "crop_size": 448,
+        "n_workers": 5
+    },
+    "model": {
+        "name": "resnet18-base",
+        "n_class": 2,
+        "fc_bias": false,
+        "trained": "/take/masaya/nsdd/metas/models/resnet18.pth"
+    },
+    "dann": {
+        "bottleneck_dim": 256,
+        "domain_hidden_size": 1024
+    },
+    "process": {
+        "name": "resnet18-base",
+        "loss_func": "cross_entropy"
+    },
+    "opt": {
+        "name": "adam",
+        "lr": 0.0001,
+        "betas": [
+            0.9,
+            0.999
+        ],
+        "eps": 1e-08,
+        "weight_decay": 0
+    },
+    "scheduler": {
+        "name": "lambda",
+        "gamma": 0.1,
+        "decay_rate": 0
+    },
+    "train": {
+        "stop_ratio": 1.5,
+        "epoch": 1000,
+        "min_epoch": 50,
+        "seed": 2
+    }
+}

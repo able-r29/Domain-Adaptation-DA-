@@ -20,7 +20,7 @@ class Dataset(Dataset):
 
     def __getitem__(self, i:int):
         item  = self.pathes[i]
-        path  = os.path.join(self.dir_img, item['UJPG'])
+        path  = os.path.join(self.dir_img, item['filename'])
         label = item['LABEL']
         img   = preprocess.preprocess(path, self.train, self.img_size)
 
