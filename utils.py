@@ -151,21 +151,38 @@ def print_gpu_memory_info(device_ids):
 
 
 def get_datasets(config, fold, generator):
-    """データセットを取得"""
-    # ソースドメイン
-    loader_src, loader_eval_tr, loader_eval_vl = dataset.get_dataset(
+    """
+    データセットを取得（修正版：train/validationのみ）
+    
+    戻り値:
+    - loader_src_train: ソース学習用データ
+    - loader_src_val: ソース検証用データ
+    - loader_target_train: ターゲット学習用データ
+    - loader_target_val: ターゲット検証用データ
+    """
+    
+    # ★ ソースドメイン
+    loader_src_train, loader_src_val = dataset.get_dataset(
         i_fold=fold, generator=generator, shuffle=True, **config['dataset']
     )
     
-    # ターゲットドメイン
+    # ★ ターゲットドメイン
     if 'dataset_target' in config:
-        loader_target, _, _ = dataset.get_dataset(
+        loader_target_train, loader_target_val = dataset.get_dataset(
             i_fold=fold, generator=generator, shuffle=True, **config['dataset_target']
         )
     else:
-        loader_target = loader_src
+        # ターゲットが指定されていない場合はソースを使用
+        loader_target_train = loader_src_train
+        loader_target_val = loader_src_val
     
-    return loader_src, loader_eval_tr, loader_eval_vl, loader_target
+    print(f"\n📊 Dataset Split Information:")
+    print(f"  Source Train: {len(loader_src_train.dataset)} samples ({len(loader_src_train)} batches)")
+    print(f"  Source Validation: {len(loader_src_val.dataset)} samples ({len(loader_src_val)} batches)")
+    print(f"  Target Train: {len(loader_target_train.dataset)} samples ({len(loader_target_train)} batches)")
+    print(f"  Target Validation: {len(loader_target_val.dataset)} samples ({len(loader_target_val)} batches)")
+    
+    return loader_src_train, loader_src_val, loader_target_train, loader_target_val
 
 
 def get_model_and_processors(config, device):

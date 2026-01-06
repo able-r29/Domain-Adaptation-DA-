@@ -60,7 +60,14 @@ def get_dataset_single(name, pathes, train, batch_size, n_workers, shuffle, gene
 
 
 def get_dataset(name, i_fold, path_src, batch_size, n_workers, shuffle, generator=None, **karg_ds):
-    # ホールドアウトの場合
+    """
+    データセット取得（修正版）
+    
+    戻り値:
+    - loader_train: 学習用データ
+    - loader_val: 検証用データ（評価用）
+    """
+    # ★ ホールドアウトの場合
     if i_fold is None:
         if isinstance(path_src, dict):
             # 辞書形式（train/validationが分かれている）
@@ -71,18 +78,20 @@ def get_dataset(name, i_fold, path_src, batch_size, n_workers, shuffle, generato
                              generator=generator, shuffle=shuffle, **karg_ds)
             
             loader_train = get_dataset_single(pathes=train_data, train=True, **karg_loader)
-            loader_eval_tr = get_dataset_single(pathes=train_data, train=True, **karg_loader)
-            loader_eval_vl = get_dataset_single(pathes=val_data, train=False, **karg_loader)
+            loader_val = get_dataset_single(pathes=val_data, train=False, **karg_loader)
             
-            return loader_train, loader_eval_tr, loader_eval_vl
+            # ★ 修正: 2つの値のみ返す
+            return loader_train, loader_val
         else:
-            # 従来の単一ファイル
+            # 従来の単一ファイル（推論用など）
             folds = utils.load_json(path_src)
-            return get_dataset_single(name=name, pathes=folds, train=False, 
-                                    batch_size=batch_size, n_workers=n_workers, 
-                                    generator=generator, **karg_ds)
+            loader = get_dataset_single(name=name, pathes=folds, train=False, 
+                                      batch_size=batch_size, n_workers=n_workers, 
+                                      generator=generator, shuffle=shuffle, **karg_ds)
+            return loader, None  # ★ 2つ返すように統一
     
-    # K-fold cross validationの場合（従来の動作）
+    # ★ K-fold cross validationの場合
+    folds = utils.load_json(path_src)
     assert i_fold < len(folds)
 
     indices = np.arange(len(folds), dtype=int)
@@ -101,9 +110,8 @@ def get_dataset(name, i_fold, path_src, batch_size, n_workers, shuffle, generato
                        shuffle   =shuffle,
                        **karg_ds)
 
-    loader_train   = get_dataset_single(pathes=train, train=True,  **karg_loader)
-    # loader_eval_tr = get_dataset_single(pathes=train, train=False, **karg_loader)
-    loader_eval_tr = get_dataset_single(pathes=train, train=True, **karg_loader) # train=Trueにしないとmixupとサンプリング回数の重み付けが反映されないので変更
-    loader_eval_vl = get_dataset_single(pathes=val,   train=False, **karg_loader)
+    loader_train = get_dataset_single(pathes=train, train=True,  **karg_loader)
+    loader_val = get_dataset_single(pathes=val,   train=False, **karg_loader)
 
-    return loader_train, loader_eval_tr, loader_eval_vl
+    # ★ 修正: 2つの値のみ返す
+    return loader_train, loader_val

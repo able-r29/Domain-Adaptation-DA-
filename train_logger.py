@@ -1,5 +1,5 @@
 """
-DANN Training Logger - ベストモデル保存・学習再開対応版
+DANN Training Logger - 簡潔版（train/validationのみ）
 """
 
 import os
@@ -16,11 +16,10 @@ def safe_get(eval_dict, key, default=0.0):
         return default
 
 
-def create_logger_with_best_model_saving(trainer, classifier, domain_discriminator, eval_tr, eval_vl, 
-                                        loader_eval_tr, loader_eval_vl, optimizer, scheduler, out_dir, config):
-    """ベストモデル保存機能付きログ処理ハンドラーを作成"""
+def create_logger_with_best_model_saving(trainer, classifier, domain_discriminator, evaluator, 
+                                        loader_val, optimizer, scheduler, out_dir, config):
+    """ベストモデル保存機能付きログ処理ハンドラー（簡潔版）"""
     
-    # ベストモデル追跡変数（クロージャ内で保持）
     best_val_auc = 0.0
     best_epoch = 0
     best_model_info = {}
@@ -29,109 +28,103 @@ def create_logger_with_best_model_saving(trainer, classifier, domain_discriminat
     def log_results(engine):
         nonlocal best_val_auc, best_epoch, best_model_info
         
-        out = engine.state.output
-        epoch = engine.state.epoch
+        # Train時のメトリクス
+        train_out = engine.state.output
+        epoch = train_out.get('actual_epoch', engine.state.epoch)
         
-        print(f"Epoch {epoch:3d} - "
-              f"Loss: {out['loss']:.4f} "
-              f"(Cls: {out['cls_loss']:.4f}, Domain: {out['domain_loss']:.4f}) | "
-              f"Alpha: {out['alpha']:.4f}, Domain Acc: {out['domain_acc']:.3f}")
+        print(f"\n{'='*80}")
+        print(f"Epoch {epoch}")
+        print(f"{'='*80}")
+        
+        # ★ Train時のログ表示
+        print(f"📈 Training Metrics:")
+        print(f"  Total Loss: {train_out['loss']:.4f}")
+        print(f"  Classifier Loss: {train_out['cls_loss']:.4f} | Acc: {train_out['cls_acc']:.3f} | AUC: {train_out['cls_auc']:.3f}")
+        print(f"  Domain Loss: {train_out['domain_loss']:.4f} | Acc: {train_out['domain_acc']:.3f} | AUC: {train_out['domain_auc']:.3f}")
+        print(f"  Alpha: {train_out['alpha']:.4f} (p={train_out.get('p', 0.0):.4f})")
         
         try:
             classifier.eval()
             domain_discriminator.eval()
             
-            print("  🔍 Running training evaluation...")
-            eval_tr.run(loader_eval_tr, max_epochs=1)
-            train_eval = eval_tr.state.output
+            # ★ Validation評価
+            print(f"\n🔍 Running validation...")
+            evaluator.run(loader_val, max_epochs=1)
+            val_out = evaluator.state.output
             
-            print("  🔍 Running validation evaluation...")
-            eval_vl.run(loader_eval_vl, max_epochs=1)
-            val_eval = eval_vl.state.output
-            
-            print(f"  Train - Loss: {safe_get(train_eval, 'total_loss', 1.0):.4f}, "
-                  f"Cls Acc: {safe_get(train_eval, 'cls_accuracy', 0.0):.3f}, "
-                  f"Domain Acc: {safe_get(train_eval, 'domain_accuracy', 0.5):.3f}")
-            
-            print(f"  Val   - Loss: {safe_get(val_eval, 'total_loss', 1.0):.4f}, "
-                  f"Cls Acc: {safe_get(val_eval, 'cls_accuracy', 0.0):.3f}, "
-                  f"AUC: {safe_get(val_eval, 'cls_auc', 0.5):.3f}, "
-                  f"Domain Acc: {safe_get(val_eval, 'domain_accuracy', 0.5):.3f}")
+            # ★ Validation時のログ表示
+            print(f"📊 Validation Metrics:")
+            print(f"  Total Loss: {safe_get(val_out, 'total_loss', 1.0):.4f}")
+            print(f"  Classifier Loss: {safe_get(val_out, 'cls_loss', 1.0):.4f} | Acc: {safe_get(val_out, 'cls_accuracy', 0.0):.3f} | AUC: {safe_get(val_out, 'cls_auc', 0.5):.3f}")
+            print(f"  Domain Loss: {safe_get(val_out, 'domain_loss', 1.0):.4f} | Acc: {safe_get(val_out, 'domain_accuracy', 0.5):.3f} | AUC: {safe_get(val_out, 'domain_auc', 0.5):.3f}")
             
             # ★ ベストモデル判定（validation AUCで判定）
-            current_val_auc = safe_get(val_eval, 'cls_auc', 0.0)
+            current_val_auc = safe_get(val_out, 'cls_auc', 0.0)
             
             if current_val_auc > best_val_auc:
                 best_val_auc = current_val_auc
                 best_epoch = epoch
                 
-                print(f"  🏆 NEW BEST MODEL! Val AUC: {current_val_auc:.4f} (previous: {best_val_auc:.4f})")
+                print(f"\n🏆 NEW BEST MODEL! Val AUC: {current_val_auc:.4f}")
                 
-                # ベストモデル情報を記録
                 best_model_info = {
                     'epoch': epoch,
                     'val_auc': current_val_auc,
-                    'val_acc': safe_get(val_eval, 'cls_accuracy', 0.0),
-                    'domain_acc': safe_get(val_eval, 'domain_accuracy', 0.5),
-                    'train_metrics': out,
-                    'val_metrics': val_eval,
+                    'val_acc': safe_get(val_out, 'cls_accuracy', 0.0),
+                    'domain_acc': safe_get(val_out, 'domain_accuracy', 0.5),
+                    'train_metrics': train_out,
+                    'val_metrics': val_out,
                 }
                 
-                # ★ ベストモデル保存
+                # ベストモデル保存
                 best_model_dict = {
                     'epoch': epoch,
                     'best_val_auc': current_val_auc,
-                    'val_cls_acc': safe_get(val_eval, 'cls_accuracy', 0.0),
-                    'val_domain_acc': safe_get(val_eval, 'domain_accuracy', 0.5),
+                    'val_cls_acc': safe_get(val_out, 'cls_accuracy', 0.0),
+                    'val_domain_acc': safe_get(val_out, 'domain_accuracy', 0.5),
                     'classifier_state_dict': classifier.state_dict(),
                     'domain_discriminator_state_dict': domain_discriminator.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'scheduler_state_dict': scheduler.state_dict() if scheduler else None,
                     'config': config,
-                    'train_metrics': out,
-                    'val_metrics': val_eval,
+                    'train_metrics': train_out,
+                    'val_metrics': val_out,
                     'wandb_id': wandb.run.id if wandb.run else None,
                 }
                 
                 best_model_path = os.path.join(out_dir, 'best_model.pth')
                 torch.save(best_model_dict, best_model_path)
-                print(f"    💾 Saved: best_model.pth")
+                print(f"  💾 Saved: best_model.pth")
             
-            # 現在のベスト情報を表示
-            print(f"  📊 Best: AUC {best_val_auc:.4f} at epoch {best_epoch}")
+            print(f"\n📈 Best Model: AUC {best_val_auc:.4f} at epoch {best_epoch}")
             
-            # WandBログ（ベスト情報追加）
+            # ★ WandBログ（必要なメトリクスのみ）
             wandb_log = {
                 "epoch": epoch,
-                "train/total_loss": out['loss'],
-                "train/cls_loss": out['cls_loss'],
-                "train/domain_loss": out['domain_loss'],
-                "train/cls_acc": out['cls_acc'],
-                "train/cls_auc": out['cls_auc'],
-                "train/domain_acc": out['domain_acc'],
-                "train/domain_auc": out['domain_auc'],
-                "train/alpha": out['alpha'],
-                "train_eval/total_loss": safe_get(train_eval, 'total_loss', 1.0),
-                "train_eval/cls_acc": safe_get(train_eval, 'cls_accuracy', 0.0),
-                "train_eval/cls_auc": safe_get(train_eval, 'cls_auc', 0.5),
-                "train_eval/domain_acc": safe_get(train_eval, 'domain_accuracy', 0.5),
-                "train_eval/domain_auc": safe_get(train_eval, 'domain_auc', 0.5),
-                "val/total_loss": safe_get(val_eval, 'total_loss', 1.0),
-                "val/cls_acc": safe_get(val_eval, 'cls_accuracy', 0.0),
-                "val/cls_auc": safe_get(val_eval, 'cls_auc', 0.5),
-                "val/domain_acc": safe_get(val_eval, 'domain_accuracy', 0.5),
-                "val/domain_auc": safe_get(val_eval, 'domain_auc', 0.5),
-                # ★ ベスト情報追加
+                
+                # Train時のメトリクス
+                "train/total_loss": train_out['loss'],
+                "train/cls_loss": train_out['cls_loss'],
+                "train/cls_acc": train_out['cls_acc'],
+                "train/cls_auc": train_out['cls_auc'],
+                "train/domain_loss": train_out['domain_loss'],
+                "train/domain_acc": train_out['domain_acc'],
+                "train/domain_auc": train_out['domain_auc'],
+                "train/alpha": train_out['alpha'],
+                
+                # Validation時のメトリクス
+                "val/total_loss": safe_get(val_out, 'total_loss', 1.0),
+                "val/cls_loss": safe_get(val_out, 'cls_loss', 1.0),
+                "val/cls_acc": safe_get(val_out, 'cls_accuracy', 0.0),
+                "val/cls_auc": safe_get(val_out, 'cls_auc', 0.5),
+                "val/domain_loss": safe_get(val_out, 'domain_loss', 1.0),
+                "val/domain_acc": safe_get(val_out, 'domain_accuracy', 0.5),
+                "val/domain_auc": safe_get(val_out, 'domain_auc', 0.5),
+                
+                # ベストモデル情報
                 "best/val_auc": best_val_auc,
                 "best/epoch": best_epoch,
-                "best/val_acc": best_model_info.get('val_acc', 0.0),
-                "best/domain_acc": best_model_info.get('domain_acc', 0.5),
             }
-            
-            # オプション追加
-            for eval_data, prefix in [(train_eval, "train_eval"), (val_eval, "val")]:
-                if eval_data and 'target_cls_accuracy' in eval_data:
-                    wandb_log[f"{prefix}/target_cls_acc"] = eval_data['target_cls_accuracy']
             
             wandb.log(wandb_log)
             
@@ -140,26 +133,15 @@ def create_logger_with_best_model_saving(trainer, classifier, domain_discriminat
             
         except Exception as e:
             print(f"⚠️ Evaluation failed: {e}")
-            try:
-                wandb.log({
-                    "epoch": epoch,
-                    "train/total_loss": out['loss'],
-                    "train/cls_loss": out['cls_loss'],
-                    "train/domain_loss": out['domain_loss'],
-                    "train/cls_acc": out['cls_acc'],
-                    "train/alpha": out['alpha'],
-                })
-            except:
-                pass
+            import traceback
+            traceback.print_exc()
     
-    # ★ 自動チェックポイント保存（中断対策）
     @trainer.on(Events.EPOCH_COMPLETED)
     def auto_save_checkpoint(engine):
         nonlocal best_val_auc, best_epoch, best_model_info
         
-        epoch = engine.state.epoch
+        epoch = engine.state.output.get('actual_epoch', engine.state.epoch)
         
-        # 最新チェックポイント（毎エポック更新）
         checkpoint_dict = {
             'epoch': epoch,
             'classifier_state_dict': classifier.state_dict(),
@@ -173,17 +155,14 @@ def create_logger_with_best_model_saving(trainer, classifier, domain_discriminat
             'wandb_id': wandb.run.id if wandb.run else None,
         }
         
-        # 最新チェックポイント保存
         latest_path = os.path.join(out_dir, 'latest_checkpoint.pth')
         torch.save(checkpoint_dict, latest_path)
         
-        # 10エポックごとに番号付きチェックポイント
         if epoch % 10 == 0:
             numbered_path = os.path.join(out_dir, f'checkpoint_epoch_{epoch}.pth')
             torch.save(checkpoint_dict, numbered_path)
             print(f"  💾 Checkpoint: epoch_{epoch}.pth")
     
-    # ★ ベストモデル情報を返す関数（トレーニング後に使用）
     def get_best_model_info():
         return {
             'best_val_auc': best_val_auc,
@@ -194,90 +173,8 @@ def create_logger_with_best_model_saving(trainer, classifier, domain_discriminat
     return get_best_model_info
 
 
-def create_logger(trainer, classifier, domain_discriminator, eval_tr, eval_vl, 
-                 loader_eval_tr, loader_eval_vl):
-    """従来のログ処理ハンドラー（後方互換性用）"""
-    
-    @trainer.on(Events.EPOCH_COMPLETED)
-    def log_results(engine):
-        out = engine.state.output
-        epoch = engine.state.epoch
-        
-        print(f"Epoch {epoch:3d} - "
-              f"Loss: {out['loss']:.4f} "
-              f"(Cls: {out['cls_loss']:.4f}, Domain: {out['domain_loss']:.4f}) | "
-              f"Alpha: {out['alpha']:.4f}, Domain Acc: {out['domain_acc']:.3f}")
-        
-        try:
-            classifier.eval()
-            domain_discriminator.eval()
-            
-            print("  🔍 Running training evaluation...")
-            eval_tr.run(loader_eval_tr, max_epochs=1)
-            train_eval = eval_tr.state.output
-            
-            print("  🔍 Running validation evaluation...")
-            eval_vl.run(loader_eval_vl, max_epochs=1)
-            val_eval = eval_vl.state.output
-            
-            print(f"  Train - Loss: {safe_get(train_eval, 'total_loss', 1.0):.4f}, "
-                  f"Cls Acc: {safe_get(train_eval, 'cls_accuracy', 0.0):.3f}, "
-                  f"Domain Acc: {safe_get(train_eval, 'domain_accuracy', 0.5):.3f}")
-            
-            print(f"  Val   - Loss: {safe_get(val_eval, 'total_loss', 1.0):.4f}, "
-                  f"Cls Acc: {safe_get(val_eval, 'cls_accuracy', 0.0):.3f}, "
-                  f"Domain Acc: {safe_get(val_eval, 'domain_accuracy', 0.5):.3f}")
-            
-            # WandBログ
-            wandb_log = {
-                "epoch": epoch,
-                "train/total_loss": out['loss'],
-                "train/cls_loss": out['cls_loss'],
-                "train/domain_loss": out['domain_loss'],
-                "train/cls_acc": out['cls_acc'],
-                "train/cls_auc": out['cls_auc'],
-                "train/domain_acc": out['domain_acc'],
-                "train/domain_auc": out['domain_auc'],
-                "train/alpha": out['alpha'],
-                "train_eval/total_loss": safe_get(train_eval, 'total_loss', 1.0),
-                "train_eval/cls_acc": safe_get(train_eval, 'cls_accuracy', 0.0),
-                "train_eval/cls_auc": safe_get(train_eval, 'cls_auc', 0.5),
-                "train_eval/domain_acc": safe_get(train_eval, 'domain_accuracy', 0.5),
-                "train_eval/domain_auc": safe_get(train_eval, 'domain_auc', 0.5),
-                "val/total_loss": safe_get(val_eval, 'total_loss', 1.0),
-                "val/cls_acc": safe_get(val_eval, 'cls_accuracy', 0.0),
-                "val/cls_auc": safe_get(val_eval, 'cls_auc', 0.5),
-                "val/domain_acc": safe_get(val_eval, 'domain_accuracy', 0.5),
-                "val/domain_auc": safe_get(val_eval, 'domain_auc', 0.5),
-            }
-            
-            # オプション追加
-            for eval_data, prefix in [(train_eval, "train_eval"), (val_eval, "val")]:
-                if eval_data and 'target_cls_accuracy' in eval_data:
-                    wandb_log[f"{prefix}/target_cls_acc"] = eval_data['target_cls_accuracy']
-            
-            wandb.log(wandb_log)
-            
-            classifier.train()
-            domain_discriminator.train()
-            
-        except Exception as e:
-            print(f"⚠️ Evaluation failed: {e}")
-            try:
-                wandb.log({
-                    "epoch": epoch,
-                    "train/total_loss": out['loss'],
-                    "train/cls_loss": out['cls_loss'],
-                    "train/domain_loss": out['domain_loss'],
-                    "train/cls_acc": out['cls_acc'],
-                    "train/alpha": out['alpha'],
-                })
-            except:
-                pass
-
-
 def setup_wandb(fold, out_dir, config, resume_id=None):
-    """WandB初期化（再開対応）"""
+    """WandB初期化"""
     wandb.init(
         project="ResNet18_DANN_base",
         name=f"dann_base_fold{fold}" if fold is not None else "dann_base_holdout",
@@ -293,15 +190,6 @@ def print_system_info(device_ids, primary_device, parallel_mode):
     """システム情報表示"""
     print(f"🚀 Starting DANN Training (resnet18_base)")
     print(f"Device: {primary_device}, Parallel: {parallel_mode}")
-
-
-def print_dataset_info(loader_src, loader_target, loader_eval_tr, loader_eval_vl):
-    """データセット情報表示"""
-    print(f"📂 Loading datasets...")
-    print(f"  Source train batches: {len(loader_src)}")
-    print(f"  Target train batches: {len(loader_target)}")
-    print(f"  Source eval batches: {len(loader_eval_tr)}")
-    print(f"  Source val batches: {len(loader_eval_vl)}")
 
 
 def print_model_info(backbone, num_classes, bottleneck_dim, domain_hidden):

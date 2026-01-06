@@ -11,7 +11,7 @@ from ignite.contrib.handlers import ProgressBar
 
 from domain_discriminator import DomainDiscriminator, DANNClassifier
 from train_engine import create_train_step, create_evaluation_step
-from train_logger import create_logger_with_best_model_saving, setup_wandb, print_system_info, print_dataset_info, print_model_info, print_optimizer_info
+from train_logger import create_logger_with_best_model_saving, setup_wandb, print_system_info, print_model_info, print_optimizer_info
 import utils
 
 
@@ -150,19 +150,19 @@ def adjust_batch_size_for_parallel(config, device_ids):
 
 
 def main(fold, device_ids, primary_device, out_dir, parallel_mode, resume_path=None, **config):
-    """メイン学習関数（GPU並列・ベストモデル保存・学習再開対応）"""
+    """メイン学習関数（完全修正版）"""
     
     print_system_info(device_ids, primary_device, parallel_mode)
     
     # バッチサイズ調整
     config = adjust_batch_size_for_parallel(config, device_ids)
     
-    # ★ 学習再開チェック
+    # 学習再開チェック
     checkpoint, used_checkpoint_path = load_checkpoint_if_exists(out_dir, resume_path)
     
     if checkpoint:
         start_epoch = checkpoint['epoch'] + 1
-        config = checkpoint['config']  # 保存された設定を使用
+        config = checkpoint['config']
         resume_wandb_id = checkpoint.get('wandb_id')
         best_val_auc = checkpoint.get('best_val_auc', 0.0)
         best_epoch = checkpoint.get('best_epoch', 0)
@@ -179,13 +179,19 @@ def main(fold, device_ids, primary_device, out_dir, parallel_mode, resume_path=N
     # 環境・データセットセットアップ
     torch.cuda.set_device(primary_device)
     g = utils.setup_cuda_environment(device_ids, config['train']['seed'])
-    loader_src, loader_eval_tr, loader_eval_vl, loader_target = utils.get_datasets(config, fold, g)
-    iter_target = utils.ForeverDataIterator(loader_target)
-    print_dataset_info(loader_src, loader_target, loader_eval_tr, loader_eval_vl)
+    
+    # ★ データセット取得（修正版：4つの戻り値）
+    loader_src_train, loader_src_val, loader_target_train, loader_target_val = utils.get_datasets(config, fold, g)
+    
+    # 学習用イテレータ
+    iter_target_train = utils.ForeverDataIterator(loader_target_train)
+    
+    # 評価用イテレータ
+    iter_target_val = utils.ForeverDataIterator(loader_target_val)
     
     # モデル構築
     backbone, pre, post, func, met = utils.get_model_and_processors(config, primary_device)
-    if not validate_backbone(backbone, loader_src, primary_device, pre):
+    if not validate_backbone(backbone, loader_src_train, primary_device, pre):
         return
     
     # DANN設定
@@ -198,7 +204,7 @@ def main(fold, device_ids, primary_device, out_dir, parallel_mode, resume_path=N
     classifier = DANNClassifier(backbone, num_classes, bottleneck_dim).to(primary_device)
     domain_discriminator = DomainDiscriminator(feature_dim=bottleneck_dim, hidden_dim=domain_hidden).to(primary_device)
     
-    # ★ 並列化セットアップ
+    # 並列化セットアップ
     classifier, domain_discriminator = setup_parallel_training(
         classifier, domain_discriminator, device_ids, primary_device, parallel_mode
     )
@@ -209,28 +215,31 @@ def main(fold, device_ids, primary_device, out_dir, parallel_mode, resume_path=N
     scheduler = utils.get_scheduler(optimizer, config)
     print_optimizer_info(optimizer, scheduler)
     
-    # ★ 学習済み状態の復元（再開時）
+    # 学習済み状態の復元（再開時）
     if checkpoint:
         print("📥 Restoring model states...")
         restore_model_states(checkpoint, classifier, domain_discriminator, optimizer, scheduler)
     
     # エンジン作成
-    train_step = create_train_step(classifier, domain_discriminator, optimizer, scheduler,
-                                  iter_target, primary_device, config, loader_src)
+    train_step = create_train_step(
+        classifier, domain_discriminator, optimizer, scheduler,
+        iter_target_train, primary_device, config, loader_src_train, start_epoch
+    )
     trainer = Engine(train_step)
     
-    evaluation_step = create_evaluation_step(classifier, domain_discriminator, iter_target, primary_device, config)
-    eval_tr = Engine(evaluation_step)
-    eval_vl = Engine(evaluation_step)
+    evaluation_step = create_evaluation_step(
+        classifier, domain_discriminator, iter_target_val, primary_device, config, start_epoch
+    )
+    evaluator = Engine(evaluation_step)
     
     # プログレスバー
     pbar = ProgressBar()
     pbar.attach(trainer, output_transform=lambda x: {'loss': f"{x['loss']:.4f}"})
     
-    # ★ ベストモデル保存機能付きログ
+    # ベストモデル保存機能付きログ
     get_best_model_info = create_logger_with_best_model_saving(
-        trainer, classifier, domain_discriminator, eval_tr, eval_vl, 
-        loader_eval_tr, loader_eval_vl, optimizer, scheduler, out_dir, config
+        trainer, classifier, domain_discriminator, evaluator, 
+        loader_src_val, optimizer, scheduler, out_dir, config
     )
     
     # 学習実行
@@ -245,18 +254,18 @@ def main(fold, device_ids, primary_device, out_dir, parallel_mode, resume_path=N
         print(f"  Remaining epochs: {max_epochs - start_epoch + 1}")
         print("=" * 80)
         
-        # ★ エンジンの状態を調整（再開時）
+        # エンジンの状態を調整（再開時）
         if start_epoch > 1:
             trainer.state.epoch = start_epoch - 1
-            trainer.state.iteration = (start_epoch - 1) * len(loader_src)
+            trainer.state.iteration = (start_epoch - 1) * len(loader_src_train)
         
         remaining_epochs = max_epochs - start_epoch + 1
-        trainer.run(loader_src, max_epochs=remaining_epochs)
+        trainer.run(loader_src_train, max_epochs=remaining_epochs)
         
         print("=" * 80)
         print("✓ Training completed successfully!")
         
-        # ★ 最終モデル保存
+        # 最終モデル保存
         final_model_dict = {
             'epoch': max_epochs,
             'classifier_state_dict': classifier.state_dict(),
@@ -270,7 +279,7 @@ def main(fold, device_ids, primary_device, out_dir, parallel_mode, resume_path=N
         torch.save(final_model_dict, final_model_path)
         print(f"💾 Final model saved: final_model.pth")
         
-        # ★ ベストモデル情報の最終表示
+        # ベストモデル情報の最終表示
         best_info = get_best_model_info()
         print(f"\n🏆 TRAINING SUMMARY:")
         print(f"  Best Validation AUC: {best_info['best_val_auc']:.4f}")
@@ -289,7 +298,7 @@ def main(fold, device_ids, primary_device, out_dir, parallel_mode, resume_path=N
     except KeyboardInterrupt:
         print(f"\n🛑 Training interrupted at epoch {trainer.state.epoch}")
         
-        # ★ 中断時自動保存
+        # 中断時自動保存
         interrupt_dict = {
             'epoch': trainer.state.epoch,
             'classifier_state_dict': classifier.state_dict(),
@@ -306,7 +315,7 @@ def main(fold, device_ids, primary_device, out_dir, parallel_mode, resume_path=N
         torch.save(interrupt_dict, interrupt_path)
         print(f"💾 Interrupted state saved: interrupted_checkpoint.pth")
         
-        # 再開コマンド表示（デバイス指定も含む）
+        # 再開コマンド表示
         device_str = ','.join(map(str, device_ids))
         resume_cmd = f"python trainer_d2.py --config {args.config} --device {device_str}"
         if args.fold is not None:
@@ -361,7 +370,7 @@ if __name__ == '__main__':
     # 出力ディレクトリ（複数GPU対応）
     config_name = os.path.splitext(os.path.basename(args.config))[0]
     device_str = "_".join(map(str, device_ids))
-    args.out_dir = f'../dann_exp1_gpu{device_str}'
+    args.out_dir = f'../dann_exp_final2'
     if args.fold is not None:
         args.out_dir = f"{args.out_dir}_fold{args.fold}"
     
